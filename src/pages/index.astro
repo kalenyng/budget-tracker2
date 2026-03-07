@@ -1,5 +1,5 @@
 ---
-// Main budget app page
+// Yearly overview page
 import { supabase } from '../lib/supabase';
 ---
 
@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budget Tracker</title>
+  <title>Yearly Overview - Budget Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles/global.css">
 </head>
@@ -17,99 +17,49 @@ import { supabase } from '../lib/supabase';
 
   <header>
     <div class="label">Personal finance tracker</div>
-    <h1>Monthly<span> Tracker</span></h1>
-    <div class="subtitle">Set budgets and track actual spending</div>
+    <h1>Yearly<span> Overview</span></h1>
+    <div class="subtitle">Financial year: April to March</div>
     
     <!-- Navigation -->
     <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-      <a href="/year" class="currency-btn" style="text-decoration: none; display: inline-block;">Yearly Overview</a>
       <a href="/settings" class="currency-btn" style="text-decoration: none; display: inline-block;">Settings</a>
       <div style="display: flex; align-items: center; gap: 0; margin-left: 12px;">
-        <button onclick="changeMonth(-1)" style="background: var(--surface2); border: 1px solid var(--border); border-right: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 4px 0 0 4px; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'; this.nextElementSibling.style.borderColor='var(--border)'">‹</button>
-        <div id="monthDisplay" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 16px; min-width: 130px; text-align: center; cursor: default;"></div>
-        <button onclick="changeMonth(1)" style="background: var(--surface2); border: 1px solid var(--border); border-left: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 0 4px 4px 0; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">›</button>
+        <button onclick="changeFY(-1)" style="background: var(--surface2); border: 1px solid var(--border); border-right: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 4px 0 0 4px; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">‹</button>
+        <div id="yearLabel" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 16px; min-width: 100px; text-align: center;"></div>
+        <button onclick="changeFY(1)" style="background: var(--surface2); border: 1px solid var(--border); border-left: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 0 4px 4px 0; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">›</button>
       </div>
-      <button class="currency-btn" onclick="copyFromLastMonth()" title="Copy budget amounts from previous month">Copy Last Month</button>
       <div id="currentUserEmail" style="margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Signed in user">Loading account...</div>
       <button class="currency-btn" onclick="handleSignOut()" style="color: var(--red);" title="Sign Out">Sign Out</button>
     </div>
     
   </header>
 
-  <!-- Income Section -->
-  <div class="balance-section">
-    <div class="label">Monthly Income</div>
-    <div id="incomeSourcesList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
-      <!-- Income source rows rendered here by JS -->
-    </div>
-    <button onclick="addIncomeSource()" style="
-      margin-top: 12px;
-      background: transparent;
-      border: 1px dashed var(--border);
-      color: var(--text-dim);
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      padding: 8px 16px;
-      cursor: pointer;
-      border-radius: 4px;
-      width: 100%;
-      transition: all 0.15s;
-    " onmouseover="this.style.borderColor='var(--accent)'; this.style.color='var(--accent)'"
-       onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-dim)'">
-      + Add Income Source
-    </button>
-  </div>
-
-  <!-- Balance Tracking -->
-  <div class="balance-section">
-    <div class="label">Account Balances</div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px;">
-      <div>
-        <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Starting Balance</label>
-        <input type="number" id="zarStartBalance" placeholder="0" step="0.01" class="balance-input" onchange="updateBalance('ZAR', 'start', this.value)" onblur="updateBalance('ZAR', 'start', this.value)">
-      </div>
-      <div>
-        <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Ending Balance</label>
-        <input type="number" id="zarEndBalance" placeholder="0" step="0.01" class="balance-input" onchange="updateBalance('ZAR', 'end', this.value)" onblur="updateBalance('ZAR', 'end', this.value)">
-      </div>
-    </div>
-    <!-- Carried Over Balance (read-only) -->
-    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <label style="color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;">
-          Carried Over (from previous month)
-        </label>
-        <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent);" id="carriedOverDisplay">—</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Summary cards -->
-  <div class="summary-grid" id="summaryGrid">
+  <!-- Year Summary -->
+  <div class="summary-grid" id="yearSummary" style="margin-bottom: 24px;">
     <div class="summary-card">
-      <div class="label">Income</div>
-      <div class="val green" id="sumIncomeZar">—</div>
-      <div class="note" id="sumIncomeNote">Set income above</div>
+      <div class="label">Total Income</div>
+      <div class="val green" id="yearIncome">—</div>
+      <div class="note">For the year</div>
     </div>
     <div class="summary-card">
-      <div class="label">Budget</div>
-      <div class="val" id="sumBudgetZar">—</div>
-      <div class="note" id="sumNoteZar">Set budgets below</div>
+      <div class="label">Total Budget</div>
+      <div class="val" id="yearBudget">—</div>
+      <div class="note">Planned expenses</div>
     </div>
     <div class="summary-card">
-      <div class="label">Actual</div>
-      <div class="val" id="sumActualZar">—</div>
-      <div class="note" id="sumVarianceZar">—</div>
+      <div class="label">Total Actual</div>
+      <div class="val" id="yearActual">—</div>
+      <div class="note">Actual spending</div>
     </div>
     <div class="summary-card">
       <div class="label">Var</div>
-      <div class="val" id="sumNetZar">—</div>
-      <div class="note" id="sumNetNote">Income - Actual</div>
+      <div class="val" id="yearNet">—</div>
+      <div class="note" id="yearNetNote">—</div>
     </div>
   </div>
 
   <!-- Currency Conversion Summary -->
-  <div class="balance-section" id="currencyConversionSummary" style="margin-bottom: 48px; display: none;">
+  <div class="balance-section" id="zarToGbpSummary" style="margin-bottom: 48px; display: none;">
     <div class="label" id="conversionLabel">Currency Conversion</div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px; margin-top: 16px;">
       <div>
@@ -121,56 +71,57 @@ import { supabase } from '../lib/supabase';
       </div>
       <div>
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Budget Total</label>
-        <div id="budgetConvAmount" style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--accent);">£<span id="zarBudgetConvertedGbp">0</span></div>
-        <div id="budgetBaseAmount" style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--text); margin-top: 4px;"><span id="budgetBaseSymbol">R</span><span id="zarBudgetForConversion">0</span></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--text);"><span id="yearBudgetZar">0</span></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent); margin-top: 4px;"><span id="yearBudgetGbp">0</span></div>
       </div>
       <div>
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Actual Total</label>
-        <div id="actualConvAmount" style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--accent);">£<span id="zarActualConvertedGbp">0</span></div>
-        <div id="actualBaseAmount" style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--text); margin-top: 4px;"><span id="actualBaseSymbol">R</span><span id="zarActualForConversion">0</span></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--text);"><span id="yearActualZar">0</span></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent); margin-top: 4px;"><span id="yearActualGbp">0</span></div>
       </div>
       <div>
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Net Total</label>
-        <div id="netConvAmount" style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--accent);">£<span id="zarNetConvertedGbp">0</span></div>
-        <div id="netBaseAmount" style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--text); margin-top: 4px;"><span id="netBaseSymbol">R</span><span id="zarNetForConversion">0</span></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--text);"><span id="yearNetZar">0</span></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent); margin-top: 4px;"><span id="yearNetGbp">0</span></div>
       </div>
     </div>
   </div>
 
-  <!-- Budget Section -->
-  <div id="zarSection">
-    <div class="section-title" id="budgetSectionTitle">Monthly Budget</div>
-    <table class="budget-table" id="zarTable">
-      <thead>
-        <tr>
-          <td class="cat" style="color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Category</td>
-          <td style="text-align:right;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Budget</td>
-          <td style="text-align:right;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Actual</td>
-          <td style="text-align:right;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Variance</td>
-        </tr>
-      </thead>
-      <tbody id="zarBody"></tbody>
-      <tfoot>
-        <tr class="total-row" id="zarTotalRow">
-          <td class="cat" style="font-weight:500">Total</td>
-          <td class="budget-val" id="zarTotalBudget">—</td>
-          <td class="budget-val" id="zarTotalActual">—</td>
-          <td class="budget-val" id="zarTotalVariance">—</td>
-        </tr>
-      </tfoot>
-    </table>
+  <!-- Monthly Breakdown -->
+  <div id="monthlyBreakdown">
+    <div class="section-title">Monthly Breakdown</div>
+    <div id="monthsContainer"></div>
   </div>
 
-  <footer>Budget Tracker · Set budgets and track actual spending</footer>
+  <footer>Budget Tracker · FY Overview</footer>
 
 </div>
+
+<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">☀ Light</button>
 
 <script>
   import { supabase } from '../lib/supabase';
   import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
   import { formatCurrency, getCurrencySymbol, type CurrencyCode } from '../lib/currency';
-  import { showToast, showConfirm, showPrompt } from '../lib/dialogs';
+  import { showConfirm } from '../lib/dialogs';
   import type { User } from '@supabase/supabase-js';
+
+  function applyTheme(theme: string) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.textContent = theme === 'light' ? '☾ Dark' : '☀ Light';
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', next);
+    applyTheme(next);
+  }
+
+  // Apply saved theme immediately on load
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  applyTheme(savedTheme);
 
   // Check authentication on page load
   async function checkAuth() {
@@ -199,65 +150,80 @@ import { supabase } from '../lib/supabase';
   }
 
   // Type definitions
-  interface CategoryData {
-    id: string;
-    cat: string;
+  interface MonthlyData {
+    month: string;
+    monthName: string;
+    income: number;
     budget: number;
     actual: number;
-    fixed: boolean;
-    group: string | null;
-  }
-
-  interface UserSettings {
-    show_currency_conversion: boolean;
-    base_currency: string;
-    conversion_currency: string;
-  }
-
-  interface BudgetItem {
-    category_id: string;
-    month: string;
-    budget_amount: number;
-    actual_amount: number;
-    user_id?: string;
+    net: number;
+    order: number; // Financial year order: April=0, May=1, ..., March=11
   }
 
   // Window interface extension
   declare global {
     interface Window {
-      onBudgetChange: (categoryId: string, input: HTMLInputElement, currency: string) => Promise<void>;
-      onActualChange: (categoryId: string, input: HTMLInputElement, currency: string) => Promise<void>;
-      copyBudgetToActual: (categoryId: string, currency: string) => Promise<void>;
-      clearActual: (categoryId: string, currency: string) => Promise<void>;
-      updateBalance: (currency: string, type: string, value: string) => Promise<void>;
-      addIncomeSource: () => Promise<void>;
-      removeIncomeSource: (id: string) => Promise<void>;
-      updateIncomeAmount: (id: string, value: string) => Promise<void>;
-      updateIncomeSourceName: (id: string, value: string) => Promise<void>;
+      loadYear: () => Promise<void>;
       updateExchangeRate: () => Promise<void>;
-      toggleGroup: (groupName: string) => void;
-      loadMonth: () => Promise<void>;
-      handleSignOut: () => Promise<void>;
-      changeMonth: (direction: number) => void;
-      copyFromLastMonth: () => Promise<void>;
+      changeFY: (direction: number) => void;
     }
   }
 
-  let currentMonth = new Date().toISOString().slice(0, 7) + '-01';
-  let zarData: CategoryData[] = [];
-  let zarBudgets: number[] = [];
-  let zarActuals: number[] = [];
-  let incomeSources: { id: string; source_name: string; amount: number }[] = [];
-  let carriedOver = 0;
-  let totalIncome = 0; // sum of incomeSources amounts
+  // Default to current financial year start
+  // If current month is Jan/Feb/Mar, financial year started last year
+  const now = new Date();
+  let currentYear = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
+  let monthlyData: MonthlyData[] = [];
   let exchangeRate = 0;
-  let groupStates: Record<string, boolean> = {}; // Track collapsed/expanded state of groups
+  let yearIncome = 0;
+  let yearBudget = 0;
+  let yearActual = 0;
+  let yearNet = 0;
   let userCurrency: CurrencyCode = 'ZAR'; // User's preferred currency
-  let userSettings: UserSettings = {
-    show_currency_conversion: true,
-    base_currency: 'ZAR',
-    conversion_currency: 'GBP'
-  };
+  let showCurrencyConversion = false;
+  let conversionCurrency: CurrencyCode = 'GBP';
+
+  function updateYearLabel() {
+    const labelEl = document.getElementById('yearLabel');
+    if (labelEl) labelEl.textContent = `FY ${currentYear}/${String(currentYear + 1).slice(2)}`;
+  }
+
+  function changeFY(direction: number) {
+    currentYear += direction;
+    updateYearLabel();
+    loadYear();
+  }
+
+  // Load user currency preference
+  async function loadUserCurrency() {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      const { data: settingsRows } = await supabase
+        .from('user_settings')
+        .select('key, value, preferred_currency')
+        .eq('user_id', user.id);
+
+      const settingsMap = Object.fromEntries((settingsRows || []).map(s => [s.key, s.value]));
+      userCurrency = (settingsRows?.[0]?.preferred_currency as CurrencyCode) || 'ZAR';
+      showCurrencyConversion = settingsMap['show_currency_conversion'] === 'true';
+      conversionCurrency = (settingsMap['conversion_currency'] as CurrencyCode) || 'GBP';
+
+      // Update conversion section visibility
+      const conversionSection = document.getElementById('zarToGbpSummary');
+      if (conversionSection) {
+        conversionSection.style.display = showCurrencyConversion ? 'block' : 'none';
+      }
+
+      const conversionLabel = document.getElementById('conversionLabel');
+      if (conversionLabel && showCurrencyConversion) {
+        conversionLabel.textContent = `${userCurrency} to ${conversionCurrency} Conversion`;
+      }
+    } catch (error) {
+      console.error('Error loading user currency:', error);
+    }
+  }
 
   // Initialize
   async function init() {
@@ -275,19 +241,9 @@ import { supabase } from '../lib/supabase';
         return;
       }
       
-      // Load user settings first
-      await loadUserSettings();
+      // Load user currency preference
+      await loadUserCurrency();
       
-      // Check for month parameter in URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const monthParam = urlParams.get('month');
-      if (monthParam) {
-        currentMonth = monthParam + '-01';
-      }
-
-      // Update month display
-      updateMonthDisplay();
-
       // Test connection
       const { data: testData, error: testError } = await supabase
         .from('categories')
@@ -299,963 +255,319 @@ import { supabase } from '../lib/supabase';
         return;
       }
       
-      await loadMonth();
+      updateYearLabel();
+      await loadYear();
     } catch (error) {
       console.error('Initialization error:', error);
     }
   }
 
-  async function loadUserSettings() {
-    try {
-      const user = await getCurrentUser();
-      if (!user) return;
-      
-      // Load preferred_currency from user_settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('user_settings')
-        .select('preferred_currency')
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle();
-      
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        console.error('Error loading currency preference:', settingsError);
-      }
-      
-      // Set user currency preference
-      userCurrency = (settingsData?.preferred_currency as CurrencyCode) || 'ZAR';
-      
-      // If no settings row exists, create one
-      if (!settingsData) {
-        await supabase.from('user_settings').insert({
-          user_id: user.id,
-          key: 'preferred_currency',
-          value: 'ZAR',
-          preferred_currency: 'ZAR'
-        });
-      }
-      
-      // Also load legacy settings for backward compatibility
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('user_settings')
-        .select('key, value')
-        .eq('user_id', user.id);
-      
-      if (!legacyError && legacyData) {
-        legacyData.forEach(setting => {
-          if (setting.key === 'show_currency_conversion') {
-            userSettings.show_currency_conversion = setting.value === 'true';
-          } else if (setting.key === 'base_currency') {
-            userSettings.base_currency = setting.value || 'ZAR';
-          } else if (setting.key === 'conversion_currency') {
-            userSettings.conversion_currency = setting.value || 'GBP';
-          }
-        });
-      }
-      
-      // Update UI based on settings
-      updateConversionSectionVisibility();
-    } catch (error) {
-      console.error('Error loading user settings:', error);
-    }
-  }
-
-  function updateConversionSectionVisibility() {
-    const conversionSection = document.getElementById('currencyConversionSummary');
-    const conversionLabel = document.getElementById('conversionLabel');
-    
-    if (conversionSection && conversionLabel) {
-      if (userSettings.show_currency_conversion) {
-        conversionSection.style.display = 'block';
-        const baseCurrency = userSettings.base_currency || 'ZAR';
-        const conversionCurrency = userSettings.conversion_currency || 'GBP';
-        conversionLabel.textContent = `${baseCurrency} to ${conversionCurrency} Conversion`;
-        // Update currency symbols when visibility changes
-        updateZarToGbpConversion();
-      } else {
-        conversionSection.style.display = 'none';
-      }
-    }
-  }
-
-  function updateCurrencyDisplay() {
-    const currencySym = getCurrencySymbol(userCurrency);
-    
-    // Update section title
-    const sectionTitleEl = document.getElementById('budgetSectionTitle');
-    if (sectionTitleEl) sectionTitleEl.textContent = `Monthly Budget (${userCurrency})`;
-    
-    // Update balance input handlers to use current currency
-    const startBalanceInput = document.getElementById('zarStartBalance') as HTMLInputElement | null;
-    const endBalanceInput = document.getElementById('zarEndBalance') as HTMLInputElement | null;
-    if (startBalanceInput) {
-      startBalanceInput.onchange = function() { updateBalance(userCurrency, 'start', (this as HTMLInputElement).value); };
-      startBalanceInput.onblur = function() { updateBalance(userCurrency, 'start', (this as HTMLInputElement).value); };
-    }
-    if (endBalanceInput) {
-      endBalanceInput.onchange = function() { updateBalance(userCurrency, 'end', (this as HTMLInputElement).value); };
-      endBalanceInput.onblur = function() { updateBalance(userCurrency, 'end', (this as HTMLInputElement).value); };
-    }
-    
-    // Update all hardcoded currency symbols in static HTML
-    const sym = getCurrencySymbol(userCurrency);
-
-    const budgetBaseSym = document.getElementById('budgetBaseSymbol');
-    if (budgetBaseSym) budgetBaseSym.textContent = sym;
-
-    const actualBaseSym = document.getElementById('actualBaseSymbol');
-    if (actualBaseSym) actualBaseSym.textContent = sym;
-
-    const netBaseSym = document.getElementById('netBaseSymbol');
-    if (netBaseSym) netBaseSym.textContent = sym;
-    
-    // Update all currency symbols in the table (will be done in buildZAR)
-    renderIncomeSources(); // re-render with updated currency symbol
-  }
-
   function showSkeletons() {
-    // Income sources skeleton
-    const incomeList = document.getElementById('incomeSourcesList');
-    if (incomeList) {
-      incomeList.innerHTML = `
-        <div class="skeleton skeleton-row" style="width: 100%;"></div>
-        <div class="skeleton skeleton-row" style="width: 100%;"></div>
-      `;
-    }
-
-    // Summary cards skeleton
-    const summaryGrid = document.getElementById('summaryGrid');
-    if (summaryGrid) {
-      summaryGrid.innerHTML = `
+    // Year summary cards skeleton
+    const yearSummary = document.getElementById('yearSummary');
+    if (yearSummary) {
+      yearSummary.innerHTML = `
         <div class="skeleton-card">
           <div class="skeleton skeleton-block" style="width: 40%;"></div>
           <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
+          <div class="skeleton skeleton-block" style="width: 50%;"></div>
         </div>
         <div class="skeleton-card">
           <div class="skeleton skeleton-block" style="width: 40%;"></div>
           <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
+          <div class="skeleton skeleton-block" style="width: 50%;"></div>
         </div>
         <div class="skeleton-card">
           <div class="skeleton skeleton-block" style="width: 40%;"></div>
           <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
+          <div class="skeleton skeleton-block" style="width: 50%;"></div>
         </div>
         <div class="skeleton-card">
           <div class="skeleton skeleton-block" style="width: 40%;"></div>
           <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
+          <div class="skeleton skeleton-block" style="width: 50%;"></div>
         </div>
       `;
     }
 
-    // Budget table skeleton
-    const zarBody = document.getElementById('zarBody');
-    if (zarBody) {
-      zarBody.innerHTML = `
-        <tr><td colspan="4"><div class="skeleton skeleton-row" style="margin: 4px 0;"></div></td></tr>
-        <tr><td colspan="4"><div class="skeleton skeleton-row" style="margin: 4px 0;"></div></td></tr>
-        <tr><td colspan="4"><div class="skeleton skeleton-row" style="margin: 4px 0;"></div></td></tr>
-        <tr><td colspan="4"><div class="skeleton skeleton-row" style="margin: 4px 0;"></div></td></tr>
-        <tr><td colspan="4"><div class="skeleton skeleton-row" style="margin: 4px 0;"></div></td></tr>
-        <tr><td colspan="4"><div class="skeleton skeleton-row" style="margin: 4px 0;"></div></td></tr>
-      `;
+    // Monthly breakdown skeleton — 12 month card placeholders
+    const monthsContainer = document.getElementById('monthsContainer');
+    if (monthsContainer) {
+      monthsContainer.innerHTML = Array(12).fill(`
+        <div class="month-card" style="pointer-events: none;">
+          <div class="month-header">
+            <div class="skeleton skeleton-block" style="width: 50%; height: 18px;"></div>
+          </div>
+          <div class="month-stats">
+            <div>
+              <div class="skeleton skeleton-block" style="width: 40%;"></div>
+              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
+            </div>
+            <div>
+              <div class="skeleton skeleton-block" style="width: 40%;"></div>
+              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
+            </div>
+            <div>
+              <div class="skeleton skeleton-block" style="width: 40%;"></div>
+              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
+            </div>
+            <div>
+              <div class="skeleton skeleton-block" style="width: 40%;"></div>
+              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
+            </div>
+          </div>
+        </div>
+      `).join('');
     }
   }
 
   function restoreSummaryCards() {
-    const summaryGrid = document.getElementById('summaryGrid');
-    if (!summaryGrid) return;
-    summaryGrid.innerHTML = `
+    const yearSummary = document.getElementById('yearSummary');
+    if (!yearSummary) return;
+    yearSummary.innerHTML = `
       <div class="summary-card">
-        <div class="label">Income</div>
-        <div class="val green" id="sumIncomeZar">—</div>
-        <div class="note" id="sumIncomeNote">Set income above</div>
+        <div class="label">Total Income</div>
+        <div class="val green" id="yearIncome">—</div>
+        <div class="note">For the year</div>
       </div>
       <div class="summary-card">
-        <div class="label">Budget</div>
-        <div class="val" id="sumBudgetZar">—</div>
-        <div class="note" id="sumNoteZar">Set budgets below</div>
+        <div class="label">Total Budget</div>
+        <div class="val" id="yearBudget">—</div>
+        <div class="note">Planned expenses</div>
       </div>
       <div class="summary-card">
-        <div class="label">Actual</div>
-        <div class="val" id="sumActualZar">—</div>
-        <div class="note" id="sumVarianceZar">—</div>
+        <div class="label">Total Actual</div>
+        <div class="val" id="yearActual">—</div>
+        <div class="note">Actual spending</div>
       </div>
       <div class="summary-card">
         <div class="label">Var</div>
-        <div class="val" id="sumNetZar">—</div>
-        <div class="note" id="sumNetNote">Income - Actual</div>
+        <div class="val" id="yearNet">—</div>
+        <div class="note" id="yearNetNote">—</div>
       </div>
     `;
   }
 
-  async function loadMonth() {
+  async function loadYear() {
     showSkeletons();
-    updateMonthDisplay();
     
     try {
-      // Load categories (no currency filter - use user's preferred currency for display)
-      const { data: zarCategories, error: catError } = await supabase
-        .from('categories')
-        .select('*')
-        .order('category_group', { ascending: true, nullsFirst: false })
-        .order('type', { ascending: false })
-        .order('name', { ascending: true });
+      // Get current user first (needed for user_id in queries)
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Financial year: April (month 3) of currentYear to March (month 2) of currentYear+1
+      // Build months array: April, May, ..., December, January, February, March
+      const months: string[] = [];
+      // First 9 months: April (3) through December (11) of currentYear
+      for (let i = 0; i < 9; i++) {
+        const monthIndex = 3 + i; // April = month index 3
+        // Use UTC to avoid timezone issues
+        const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+        months.push(monthStr);
+      }
+      // Last 3 months: January (0), February (1), March (2) of currentYear+1
+      for (let i = 0; i < 3; i++) {
+        const monthIndex = i; // January = 0, February = 1, March = 2
+        // Use UTC to avoid timezone issues
+        const monthStr = `${currentYear + 1}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+        months.push(monthStr);
+      }
+      
+      // Load all income sources for all months (sum per month)
+      const { data: incomes } = await supabase
+        .from('incomes')
+        .select('month, amount')
+        .in('month', months)
+        .eq('is_template', false);
 
-      if (catError) {
-        throw new Error(`Failed to load categories: ${catError.message}`);
+      const incomeMap: Record<string, number> = {};
+      (incomes || []).forEach(inc => {
+        const m = inc.month;
+        incomeMap[m] = (incomeMap[m] || 0) + parseFloat(inc.amount || 0);
+      });
+
+      // Add carried over balances to each month's income
+      for (let i = 0; i < months.length; i++) {
+        const month = months[i];
+        // Ensure every month has at least 0 in the incomeMap (no undefined / NaN)
+        if (incomeMap[month] === undefined) incomeMap[month] = 0;
+        if (i === 0) continue; // No previous month in this FY view for April
+        const prevMonthDate = new Date(month);
+        prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+        const prevMonth = prevMonthDate.toISOString().slice(0, 7) + '-01';
+
+        const { data: prevBalance } = await supabase
+          .from('monthly_balances')
+          .select('ending_balance')
+          .eq('month', prevMonth)
+          .eq('user_id', user?.id)
+          .maybeSingle();
+
+        // Only add carried-over amount if ending_balance is explicitly set and greater than 0
+        const carryAmount = prevBalance?.ending_balance != null ? parseFloat(prevBalance.ending_balance) : 0;
+        if (carryAmount > 0) {
+          incomeMap[month] = (incomeMap[month] || 0) + carryAmount;
+        }
       }
 
-      // Get current user first (needed for user_id in upserts)
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Load budgets with actual amounts (filtered by user_id via RLS)
+      // Load budgets for all months (RLS should filter by user_id, but we'll be explicit)
       const { data: budgets, error: budgetError } = await supabase
         .from('budgets')
-        .select('category_id, budget_amount, actual_amount')
-        .eq('month', currentMonth);
+        .select('month, budget_amount, actual_amount')
+        .in('month', months);
 
       if (budgetError) {
-        console.warn('Budgets query error:', budgetError);
+        console.error('Error loading budgets:', budgetError);
       }
 
       const budgetMap: Record<string, number> = {};
       const actualMap: Record<string, number> = {};
-      
-      budgets?.forEach(b => {
-        budgetMap[b.category_id] = parseFloat(b.budget_amount || 0);
-        actualMap[b.category_id] = parseFloat(b.actual_amount || 0);
+      (budgets || []).forEach(b => {
+        const month = b.month;
+        let budgetAmount = parseFloat(b.budget_amount || 0);
+        const actualAmount = parseFloat(b.actual_amount || 0);
+        budgetMap[month] = (budgetMap[month] || 0) + budgetAmount;
+        actualMap[month] = (actualMap[month] || 0) + actualAmount;
       });
 
-      // --- Load income sources ---
-      // Get all template rows to know what sources this user has
-      const { data: templates } = await supabase
-        .from('incomes')
-        .select('source_name')
-        .eq('user_id', user?.id)
-        .eq('is_template', true)
-        .eq('month', '1970-01-01');
+      // Build monthly data with explicit order (April=0, May=1, ..., March=11)
+      // Reset monthlyData to ensure we only have current financial year months
+      monthlyData = [];
+      months.forEach((month, index) => {
+        const monthDate = new Date(month);
+        const monthName = monthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const income = incomeMap[month] || 0;
+        const budget = budgetMap[month] || 0;
+        const actual = actualMap[month] || 0;
+        const net = income - actual;
 
-      // Ensure monthly rows exist for each template
-      if (templates && templates.length > 0) {
-        const upserts = templates.map(t => ({
-          source_name: t.source_name,
-          month: currentMonth,
-          amount: 0,
-          currency: userCurrency,
-          is_template: false,
-          user_id: user?.id
-        }));
-        await supabase.from('incomes').upsert(upserts, { onConflict: 'source_name,month,user_id', ignoreDuplicates: true });
-      }
-
-      // Load monthly income rows for current month
-      const { data: monthlyIncomes } = await supabase
-        .from('incomes')
-        .select('id, source_name, amount')
-        .eq('month', currentMonth)
-        .eq('user_id', user?.id)
-        .eq('is_template', false);
-
-      incomeSources = (monthlyIncomes || []).map(r => ({
-        id: r.id,
-        source_name: r.source_name,
-        amount: parseFloat(r.amount || 0)
-      }));
-      totalIncome = incomeSources.reduce((sum, s) => sum + s.amount, 0);
-
-      // --- Load carried over balance ---
-      const prevMonthDate = new Date(currentMonth);
-      prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
-      const prevMonth = prevMonthDate.toISOString().slice(0, 7) + '-01';
-
-      const { data: prevBalance } = await supabase
-        .from('monthly_balances')
-        .select('ending_balance')
-        .eq('month', prevMonth)
-        .eq('user_id', user?.id)
-        .maybeSingle();
-
-      if (prevBalance && prevBalance.ending_balance !== null) {
-        carriedOver = parseFloat(prevBalance.ending_balance || 0);
-      } else {
-        carriedOver = 0;
-        const prevMonthName = prevMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-        showToast(`No ending balance set for ${prevMonthName}. Carried over amount is 0.`, 'error');
-      }
-
-      // Auto-fill starting balance from previous month's ending balance
-      const startBalanceInput = document.getElementById('zarStartBalance') as HTMLInputElement | null;
-      if (startBalanceInput) {
-        startBalanceInput.value = carriedOver > 0 ? carriedOver.toString() : '';
-      }
-
-      // Save it to monthly_balances if it differs from what's already there
-      if (carriedOver > 0) {
-        const { data: currentBalance } = await supabase
-          .from('monthly_balances')
-          .select('starting_balance')
-          .eq('month', currentMonth)
-          .eq('user_id', user?.id)
-          .maybeSingle();
-
-        // Only write if starting balance isn't already set
-        if (!currentBalance || currentBalance.starting_balance === null) {
-          await supabase.from('monthly_balances').upsert({
-            month: currentMonth,
-            currency: userCurrency,
-            starting_balance: carriedOver,
-            ending_balance: null,
-            user_id: user?.id
-          }, { onConflict: 'month,currency,user_id' });
-        }
-      }
-
-      // Load balances (no currency filter - use user's preferred currency)
-      const { data: balances, error: balancesError } = await supabase
-        .from('monthly_balances')
-        .select('starting_balance, ending_balance')
-        .eq('month', currentMonth)
-        .maybeSingle();
-      
-      if (balancesError && balancesError.code !== 'PGRST116') {
-        console.warn('Balances query error:', balancesError);
-      }
-
-      if (balances) {
-        const startBalanceInput = document.getElementById('zarStartBalance') as HTMLInputElement | null;
-        const endBalanceInput = document.getElementById('zarEndBalance') as HTMLInputElement | null;
-        if (startBalanceInput) startBalanceInput.value = balances.starting_balance || '';
-        if (endBalanceInput) endBalanceInput.value = balances.ending_balance || '';
-      }
-
-      // Set default budgets if none exist
-      const budgetsToInsert: BudgetItem[] = [];
-      (zarCategories || []).forEach(cat => {
-        if (!budgetMap[cat.id]) {
-          const budgetAmount = 0;
-          budgetsToInsert.push({
-            category_id: cat.id,
-            month: currentMonth,
-            budget_amount: budgetAmount,
-            actual_amount: 0,
-            user_id: user?.id
-          });
-          budgetMap[cat.id] = budgetAmount;
-        }
-      });
-
-      if (budgetsToInsert.length > 0) {
-        const { error: insertError } = await supabase.from('budgets').upsert(budgetsToInsert, {
-          onConflict: 'category_id,month,user_id'
+        monthlyData.push({
+          month,
+          monthName,
+          income,
+          budget,
+          actual,
+          net,
+          order: index // Preserve financial year order: April=0, May=1, ..., March=11
         });
-        if (insertError) {
-          console.error('Error upserting budgets:', insertError);
-        }
+      });
+
+      // Calculate year totals
+      yearIncome = monthlyData.reduce((sum, m) => sum + m.income, 0);
+      yearBudget = monthlyData.reduce((sum, m) => sum + m.budget, 0);
+      yearActual = monthlyData.reduce((sum, m) => sum + m.actual, 0);
+      yearNet = yearIncome - yearActual;
+
+      // Restore summary cards before writing values
+      restoreSummaryCards();
+
+      // Update year summary
+      const yearIncomeEl = document.getElementById('yearIncome');
+      const yearBudgetEl = document.getElementById('yearBudget');
+      const yearActualEl = document.getElementById('yearActual');
+      const yearNetEl = document.getElementById('yearNet');
+      const yearNetNoteEl = document.getElementById('yearNetNote');
+      
+      if (yearIncomeEl) yearIncomeEl.textContent = formatCurrency(Math.round(yearIncome), userCurrency);
+      if (yearBudgetEl) yearBudgetEl.textContent = formatCurrency(Math.round(yearBudget), userCurrency);
+      if (yearActualEl) yearActualEl.textContent = formatCurrency(Math.round(yearActual), userCurrency);
+      if (yearNetEl) {
+        yearNetEl.textContent = formatCurrency(Math.round(yearNet), userCurrency);
+        yearNetEl.className = 'val ' + (yearNet >= 0 ? 'green' : 'red');
+      }
+      if (yearNetNoteEl) {
+        const netFormatted = formatCurrency(Math.round(Math.abs(yearNet)), userCurrency);
+        yearNetNoteEl.textContent = yearNet >= 0 
+          ? `Surplus: ${netFormatted}` 
+          : `Deficit: ${netFormatted}`;
+        yearNetNoteEl.style.color = yearNet >= 0 ? 'var(--accent)' : 'var(--red)';
       }
 
-      // Build data arrays with grouping
-      zarData = (zarCategories || []).map(cat => ({
-        id: cat.id,
-        cat: cat.name,
-        budget: budgetMap[cat.id] || 0,
-        actual: actualMap[cat.id] || 0,
-        fixed: cat.type === 'fixed',
-        group: cat.category_group || null
-      }));
-
-      zarBudgets = zarData.map(r => r.budget);
-      zarActuals = zarData.map(r => r.actual);
-
-      // Update UI currency symbols and labels
-      updateCurrencyDisplay();
+      // Build monthly breakdown
+      buildMonthlyBreakdown();
       
-      restoreSummaryCards();
-      buildZAR();
-      renderIncomeSources();
-      refreshTotals();
-      await loadUserSettings(); // Reload settings in case they changed
+      // Update conversions
+      updateYearConversions();
       await updateExchangeRate();
     } catch (error) {
-      console.error('Error loading month:', error);
+      console.error('Error loading year:', error);
     }
   }
 
-
-  function buildZAR() {
-    const tbody = document.getElementById('zarBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (zarData.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px;">No categories yet.</td></tr>`;
-      return;
-    }
-    
-    const currencySym = getCurrencySymbol(userCurrency);
-    
-    // Group categories by category_group
-    const grouped: Record<string, CategoryData[]> = {};
-    const ungrouped: CategoryData[] = [];
-    
-    zarData.forEach(row => {
-      if (row.group) {
-        if (!grouped[row.group]) {
-          grouped[row.group] = [];
-        }
-        grouped[row.group].push(row);
-      } else {
-        ungrouped.push(row);
-      }
-    });
-    
-    // Sort groups and ungrouped items
-    const groupKeys = Object.keys(grouped).sort();
-    
-    // Render grouped categories
-    groupKeys.forEach(groupName => {
-      const groupItems = grouped[groupName];
-      const groupBudget = groupItems.reduce((sum: number, item: CategoryData) => sum + item.budget, 0);
-      const groupActual = groupItems.reduce((sum: number, item: CategoryData) => sum + item.actual, 0);
-      const groupVariance = groupActual - groupBudget;
-      const groupVarianceClass = groupVariance > 0 ? 'over' : (groupVariance < -groupBudget * 0.1 ? 'ok' : '');
-      
-      // Initialize group state if not set (default to expanded)
-      if (groupStates[groupName] === undefined) {
-        groupStates[groupName] = true; // true = expanded, false = collapsed
-      }
-      const isExpanded = groupStates[groupName];
-      
-      // Group header row
-      const groupHeader = document.createElement('tr');
-      groupHeader.className = 'group-header';
-      groupHeader.style.background = 'var(--surface2)';
-      groupHeader.style.borderTop = '2px solid var(--border)';
-      groupHeader.style.cursor = 'pointer';
-      groupHeader.onclick = () => toggleGroup(groupName);
-      groupHeader.innerHTML = `
-        <td class="cat" style="font-weight: 600; padding-top: 16px; padding-bottom: 8px;">
-          <span style="display: inline-block; width: 16px; margin-right: 8px; transition: transform 0.2s; transform: ${isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};">▶</span>
-          ${groupName}
-        </td>
-        <td style="text-align:right; padding-top: 16px; padding-bottom: 8px;">
-          <span style="font-weight: 600; color: var(--text);">${formatCurrency(Math.round(groupBudget), userCurrency)}</span>
-        </td>
-        <td style="text-align:right; padding-top: 16px; padding-bottom: 8px;">
-          <span style="font-weight: 600; color: var(--text);">${formatCurrency(Math.round(groupActual), userCurrency)}</span>
-        </td>
-        <td class="budget-val ${groupVarianceClass}" style="text-align:right; padding-top: 16px; padding-bottom: 8px; font-weight: 600;">
-          ${formatCurrency(Math.round(groupVariance), userCurrency)}
-        </td>
-      `;
-      tbody.appendChild(groupHeader);
-      
-      // Group items (indented) - only show if expanded
-      if (isExpanded) {
-        groupItems.forEach((row: CategoryData) => {
-          const variance = row.actual - row.budget;
-          const varianceClass = variance > 0 ? 'over' : (variance < -row.budget * 0.1 ? 'ok' : '');
-          const tr = document.createElement('tr');
-          tr.className = `group-item group-${groupName.replace(/\s+/g, '-')}`;
-          tr.style.borderLeft = '2px solid var(--accent)';
-          tr.innerHTML = `
-            <td class="cat" style="padding-left: 24px;">
-              ${row.cat}
-              ${row.fixed ? '<span class="fixed-label" style="display: inline-block; background: var(--surface2); border: 1px solid var(--accent); padding: 2px 8px; font-size: 10px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; border-radius: 3px; font-weight: 500; margin-left: 8px; vertical-align: middle; line-height: 1.4;">fixed</span>' : ''}
-            </td>
-            <td style="text-align:right;">
-              <div class="input-cell">
-                <span class="currency-sym">${currencySym}</span>
-                <input class="budget-input-dark" type="number" value="${row.budget}" data-id="${row.id}" data-currency="${userCurrency}" onchange="onBudgetChange('${row.id}', this, '${userCurrency}')" onblur="onBudgetChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
-              </div>
-            </td>
-            <td style="text-align:right;">
-              <div class="input-cell" style="gap: 4px;">
-                <button onclick="copyBudgetToActual('${row.id}', '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 6px; cursor: pointer; border-radius: 3px; transition: all 0.15s; line-height: 1;" onmouseover="this.style.borderColor='var(--accent)'; this.style.background='var(--surface)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface2)'" title="Copy budget to actual">→</button>
-                <button onclick="clearActual('${row.id}', '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--red); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 6px; cursor: pointer; border-radius: 3px; transition: all 0.15s; line-height: 1;" onmouseover="this.style.borderColor='var(--red)'; this.style.background='var(--surface)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface2)'" title="Clear actual amount">×</button>
-                <span class="currency-sym">${currencySym}</span>
-                <input class="budget-input-dark" type="number" value="${row.actual}" data-id="${row.id}" data-currency="${userCurrency}" data-type="actual" onchange="onActualChange('${row.id}', this, '${userCurrency}')" onblur="onActualChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
-                <span style="color: var(--text-dim); font-size: 11px; margin-left: 4px;">(${formatCurrency(Math.round(row.budget), userCurrency)})</span>
-              </div>
-            </td>
-            <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(variance), userCurrency)}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      }
-    });
-    
-    // Render ungrouped categories
-    ungrouped.forEach((row, i) => {
-      const variance = row.actual - row.budget;
-      const varianceClass = variance > 0 ? 'over' : (variance < -row.budget * 0.1 ? 'ok' : '');
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="cat">
-          ${row.cat}
-          ${row.fixed ? '<span class="fixed-label" style="display: inline-block; background: var(--surface2); border: 1px solid var(--accent); padding: 2px 8px; font-size: 10px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; border-radius: 3px; font-weight: 500; margin-left: 8px; vertical-align: middle; line-height: 1.4;">fixed</span>' : ''}
-        </td>
-        <td style="text-align:right;">
-          <div class="input-cell">
-            <span class="currency-sym">${currencySym}</span>
-            <input class="budget-input-dark" type="number" value="${row.budget}" data-id="${row.id}" data-currency="${userCurrency}" onchange="onBudgetChange('${row.id}', this, '${userCurrency}')" onblur="onBudgetChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
-          </div>
-        </td>
-        <td style="text-align:right;">
-          <div class="input-cell" style="gap: 4px;">
-            <button onclick="copyBudgetToActual('${row.id}', '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 6px; cursor: pointer; border-radius: 3px; transition: all 0.15s; line-height: 1;" onmouseover="this.style.borderColor='var(--accent)'; this.style.background='var(--surface)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface2)'" title="Copy budget to actual">→</button>
-            <button onclick="clearActual('${row.id}', '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--red); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 6px; cursor: pointer; border-radius: 3px; transition: all 0.15s; line-height: 1;" onmouseover="this.style.borderColor='var(--red)'; this.style.background='var(--surface)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface2)'" title="Clear actual amount">×</button>
-            <span class="currency-sym">${currencySym}</span>
-            <input class="budget-input-dark" type="number" value="${row.actual}" data-id="${row.id}" data-currency="${userCurrency}" data-type="actual" onchange="onActualChange('${row.id}', this, '${userCurrency}')" onblur="onActualChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
-            <span style="color: var(--text-dim); font-size: 11px; margin-left: 4px;">(${formatCurrency(Math.round(row.budget), userCurrency)})</span>
-          </div>
-        </td>
-        <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(variance), userCurrency)}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    
-    // Add focus handlers to maintain dark background
-    document.querySelectorAll('#zarBody .budget-input-dark').forEach(input => {
-      const inputEl = input as HTMLInputElement;
-      inputEl.addEventListener('focus', function() {
-        this.style.background = 'var(--surface2)';
-        this.style.borderColor = 'var(--accent)';
-      });
-      inputEl.addEventListener('blur', function() {
-        this.style.background = 'var(--surface2)';
-        this.style.borderColor = 'var(--border)';
-      });
-    });
-  }
-
-  async function onBudgetChange(categoryId: string, input: HTMLInputElement, currency: string) {
-    const val = parseFloat(input.value) || 0;
-    
-    try {
-      // Get current actual amount
-      const currentBudget = zarData.find(r => r.id === categoryId);
-      const currentActual = currentBudget?.actual || 0;
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('budgets').upsert({
-        category_id: categoryId,
-        month: currentMonth,
-        budget_amount: val,
-        actual_amount: currentActual,
-        user_id: user?.id
-      }, { onConflict: 'category_id,month,user_id' });
-      
-      // Update in data array
-      const index = zarData.findIndex(r => r.id === categoryId);
-      if (index !== -1) {
-        zarData[index].budget = val;
-        zarBudgets[index] = val;
-      }
-      
-      refreshTotals();
-      rebuildTable(currency);
-    } catch (error) {
-      console.error('Error updating budget:', error);
-    }
-  }
-
-  async function copyBudgetToActual(categoryId: string, currency: string) {
-    try {
-      const category = zarData.find(r => r.id === categoryId);
-      if (!category) return;
-      
-      const budgetAmount = category.budget || 0;
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('budgets').upsert({
-        category_id: categoryId,
-        month: currentMonth,
-        budget_amount: budgetAmount,
-        actual_amount: budgetAmount,
-        user_id: user?.id
-      }, { onConflict: 'category_id,month,user_id' });
-      
-      // Update in data array
-      const index = zarData.findIndex(r => r.id === categoryId);
-      if (index !== -1) {
-        zarData[index].actual = budgetAmount;
-        zarActuals[index] = budgetAmount;
-      }
-      
-      refreshTotals();
-      rebuildTable(currency);
-      updateZarToGbpConversion();
-    } catch (error) {
-      console.error('Error copying budget to actual:', error);
-    }
-  }
-
-  async function clearActual(categoryId: string, currency: string) {
-    try {
-      const category = zarData.find(r => r.id === categoryId);
-      if (!category) return;
-      
-      const budgetAmount = category.budget || 0;
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('budgets').upsert({
-        category_id: categoryId,
-        month: currentMonth,
-        budget_amount: budgetAmount,
-        actual_amount: 0,
-        user_id: user?.id
-      }, { onConflict: 'category_id,month,user_id' });
-      
-      // Update in data array
-      const index = zarData.findIndex(r => r.id === categoryId);
-      if (index !== -1) {
-        zarData[index].actual = 0;
-        zarActuals[index] = 0;
-      }
-      
-      refreshTotals();
-      rebuildTable(currency);
-      updateZarToGbpConversion();
-    } catch (error) {
-      console.error('Error clearing actual:', error);
-    }
-  }
-
-  async function onActualChange(categoryId: string, input: HTMLInputElement, currency: string) {
-    const val = parseFloat(input.value) || 0;
-    
-    try {
-      // Get current budget amount
-      const currentBudget = zarData.find(r => r.id === categoryId);
-      const currentBudgetAmount = currentBudget?.budget || 0;
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('budgets').upsert({
-        category_id: categoryId,
-        month: currentMonth,
-        budget_amount: currentBudgetAmount,
-        actual_amount: val,
-        user_id: user?.id
-      }, { onConflict: 'category_id,month,user_id' });
-      
-      // Update in data array
-      const index = zarData.findIndex(r => r.id === categoryId);
-      if (index !== -1) {
-        zarData[index].actual = val;
-        zarActuals[index] = val;
-      }
-      
-      refreshTotals();
-      rebuildTable(currency);
-      updateZarToGbpConversion();
-    } catch (error) {
-      console.error('Error updating actual:', error);
-    }
-  }
-
-  function escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  function renderIncomeSources() {
-    const container = document.getElementById('incomeSourcesList');
+  function buildMonthlyBreakdown() {
+    const container = document.getElementById('monthsContainer');
     if (!container) return;
+
     container.innerHTML = '';
 
-    const sym = getCurrencySymbol(userCurrency);
+    // Sort by order to ensure April is first and March is last
+    const sortedMonthlyData = [...monthlyData].sort((a, b) => a.order - b.order);
 
-    incomeSources.forEach(source => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-      row.innerHTML = `
-        <input type="text" value="${escapeHtml(source.source_name)}"
-          style="flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-                 font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 12px; border-radius: 4px;"
-          onchange="updateIncomeSourceName('${source.id}', this.value)"
-          placeholder="e.g. Salary">
-        <div class="input-cell" style="flex-shrink: 0;">
-          <span class="currency-sym">${sym}</span>
-          <input type="number" value="${source.amount || ''}"
-            style="background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-                   font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 12px; border-radius: 4px; width: 120px; text-align: right;"
-            placeholder="0"
-            onchange="updateIncomeAmount('${source.id}', this.value)"
-            onblur="updateIncomeAmount('${source.id}', this.value)">
-        </div>
-        <button onclick="removeIncomeSource('${source.id}')"
-          style="background: transparent; border: 1px solid var(--border); color: var(--red);
-                 font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 10px; cursor: pointer; border-radius: 4px; flex-shrink: 0;"
-          onmouseover="this.style.borderColor='var(--red)'"
-          onmouseout="this.style.borderColor='var(--border)'">×</button>
-      `;
-      container.appendChild(row);
-    });
-
-    // Update carried over display
-    const carriedOverEl = document.getElementById('carriedOverDisplay');
-    if (carriedOverEl) {
-      carriedOverEl.textContent = carriedOver > 0
-        ? formatCurrency(Math.round(carriedOver), userCurrency)
-        : '—';
-    }
-  }
-
-  async function addIncomeSource() {
-    const name = await showPrompt('Add Income Source', 'e.g. Salary, Freelance', 'Add');
-    if (!name) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    try {
-      // Create template row
-      await supabase.from('incomes').upsert({
-        source_name: name,
-        month: '1970-01-01',
-        amount: 0,
-        currency: userCurrency,
-        is_template: true,
-        user_id: user?.id
-      }, { onConflict: 'source_name,month,user_id' });
-
-      // Create monthly row for current month
-      const { data } = await supabase.from('incomes').upsert({
-        source_name: name,
-        month: currentMonth,
-        amount: 0,
-        currency: userCurrency,
-        is_template: false,
-        user_id: user?.id
-      }, { onConflict: 'source_name,month,user_id' }).select().single();
-
-      if (data) {
-        incomeSources.push({ id: data.id, source_name: name, amount: 0 });
-        renderIncomeSources();
-        refreshTotals();
-      }
-    } catch (error: any) {
-      showToast('Error adding income source: ' + error.message, 'error');
-    }
-  }
-
-  async function removeIncomeSource(id: string) {
-    const source = incomeSources.find(s => s.id === id);
-    if (!source) return;
-
-    const confirmed = await showConfirm(
-      'Remove Income Source',
-      `Remove "${source.source_name}" from all months? This deletes all monthly entries and the template.`,
-      'Remove',
-      true
-    );
-    if (!confirmed) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    try {
-      // Delete all monthly rows for this source
-      await supabase.from('incomes')
-        .delete()
-        .eq('source_name', source.source_name)
-        .eq('user_id', user?.id);
-
-      incomeSources = incomeSources.filter(s => s.id !== id);
-      renderIncomeSources();
-      refreshTotals();
-    } catch (error: any) {
-      showToast('Error removing income source: ' + error.message, 'error');
-    }
-  }
-
-  async function updateIncomeAmount(id: string, value: string) {
-    const val = parseFloat(value) || 0;
-    const source = incomeSources.find(s => s.id === id);
-    if (!source) return;
-
-    try {
-      await supabase.from('incomes')
-        .update({ amount: val })
-        .eq('id', id);
-
-      source.amount = val;
-      totalIncome = incomeSources.reduce((sum, s) => sum + s.amount, 0);
-      refreshTotals();
-    } catch (error: any) {
-      showToast('Error updating income: ' + error.message, 'error');
-    }
-  }
-
-  async function updateIncomeSourceName(id: string, newName: string) {
-    if (!newName.trim()) return;
-    const source = incomeSources.find(s => s.id === id);
-    if (!source) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    try {
-      // Update the monthly row name
-      await supabase.from('incomes')
-        .update({ source_name: newName.trim() })
-        .eq('id', id);
-
-      // Update the template row name
-      await supabase.from('incomes')
-        .update({ source_name: newName.trim() })
-        .eq('source_name', source.source_name)
-        .eq('is_template', true)
-        .eq('user_id', user?.id);
-
-      source.source_name = newName.trim();
-    } catch (error: any) {
-      showToast('Error updating name: ' + error.message, 'error');
-    }
-  }
-
-  async function updateBalance(currency: string, type: string, value: string) {
-    const val = parseFloat(value) || null;
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    try {
-      // First, try to get existing balance
-      const { data: existing } = await supabase
-        .from('monthly_balances')
-        .select('*')
-        .eq('month', currentMonth)
-        .eq('currency', userCurrency)
-        .maybeSingle();
-      
-      const updateData = {
-        month: currentMonth,
-        currency: userCurrency,
-        starting_balance: type === 'start' ? val : (existing?.starting_balance || null),
-        ending_balance: type === 'end' ? val : (existing?.ending_balance || null),
-        user_id: user?.id
+    sortedMonthlyData.forEach(monthData => {
+      const monthCard = document.createElement('div');
+      monthCard.className = 'month-card';
+      monthCard.style.cursor = 'pointer';
+      monthCard.onclick = () => {
+        const monthStr = monthData.month.slice(0, 7);
+        window.location.href = `/month?month=${monthStr}`;
       };
-      
-      await supabase.from('monthly_balances').upsert(updateData, {
-        onConflict: 'month,currency,user_id'
-      });
-    } catch (error) {
-      console.error('Error updating balance:', error);
-    }
+
+      const variance = monthData.actual - monthData.budget;
+      const varianceClass = variance > 0 ? 'over' : (variance < -monthData.budget * 0.1 ? 'ok' : '');
+
+      monthCard.innerHTML = `
+        <div class="month-header">
+          <h3>${monthData.monthName}</h3>
+          <span class="month-link">View →</span>
+        </div>
+        <div class="month-stats">
+          <div class="month-stat">
+            <span class="label">Income</span>
+            <div class="stat-val ${monthData.income > 0 ? 'green' : ''}">${formatCurrency(Math.round(monthData.income), userCurrency)}</div>
+          </div>
+          <div class="month-stat">
+            <span class="label">Budget</span>
+            <div class="stat-val">${formatCurrency(Math.round(monthData.budget), userCurrency)}</div>
+          </div>
+          <div class="month-stat">
+            <span class="label">Actual</span>
+            <div class="stat-val">${formatCurrency(Math.round(monthData.actual), userCurrency)}</div>
+          </div>
+          <div class="month-stat">
+            <span class="label">Var</span>
+            <div class="stat-val ${monthData.net >= 0 ? 'green' : 'red'}">${formatCurrency(Math.round(monthData.net), userCurrency)}</div>
+          </div>
+        </div>
+        <div class="month-variance">
+          <span class="label">Variance</span>
+          <span class="variance-val ${varianceClass}">${formatCurrency(Math.round(variance), userCurrency)}</span>
+        </div>
+      `;
+
+      container.appendChild(monthCard);
+    });
   }
-
-  function changeMonth(direction: number) {
-    const date = new Date(currentMonth);
-    date.setMonth(date.getMonth() + direction);
-    currentMonth = date.toISOString().slice(0, 7) + '-01';
-    updateMonthDisplay();
-    loadMonth();
-  }
-
-  function updateMonthDisplay() {
-    const el = document.getElementById('monthDisplay');
-    if (el) {
-      const date = new Date(currentMonth);
-      el.textContent = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-    }
-  }
-
-  function toggleGroup(groupName: string) {
-    // Toggle the group state
-    groupStates[groupName] = !groupStates[groupName];
-    // Rebuild the table to reflect the new state
-    buildZAR();
-  }
-
-  function rebuildTable(currency: string) {
-    buildZAR();
-  }
-
-  function refreshTotals() {
-    const zarBudgetTotal = zarBudgets.reduce((a: number, b: number) => a+b, 0);
-    const zarActualTotal = zarActuals.reduce((a: number, b: number) => a+b, 0);
-    const zarVariance = zarActualTotal - zarBudgetTotal;
-    const zarNet = totalIncome + carriedOver - zarActualTotal;
-
-    // Update totals
-    const zarTotalBudgetEl = document.getElementById('zarTotalBudget');
-    const zarTotalActualEl = document.getElementById('zarTotalActual');
-    const zarTotalVarianceEl = document.getElementById('zarTotalVariance');
-    
-    if (zarTotalBudgetEl) zarTotalBudgetEl.textContent = formatCurrency(Math.round(zarBudgetTotal), userCurrency);
-    if (zarTotalActualEl) zarTotalActualEl.textContent = formatCurrency(Math.round(zarActualTotal), userCurrency);
-    if (zarTotalVarianceEl) {
-      zarTotalVarianceEl.textContent = formatCurrency(Math.round(zarVariance), userCurrency);
-      zarTotalVarianceEl.className = 'budget-val ' + (zarVariance > 0 ? 'over' : (zarVariance < -zarBudgetTotal * 0.1 ? 'ok' : ''));
-    }
-
-    // Update summary cards
-    const sumIncomeZarEl = document.getElementById('sumIncomeZar');
-    const sumBudgetZarEl = document.getElementById('sumBudgetZar');
-    const sumActualZarEl = document.getElementById('sumActualZar');
-    const sumVarianceZarEl = document.getElementById('sumVarianceZar');
-    const sumNetZarEl = document.getElementById('sumNetZar');
-    const sumNetNoteEl = document.getElementById('sumNetNote');
-    
-    if (sumIncomeZarEl) sumIncomeZarEl.textContent = formatCurrency(Math.round(totalIncome + carriedOver), userCurrency);
-    
-    const sumIncomeNoteEl = document.getElementById('sumIncomeNote');
-    if (sumIncomeNoteEl) {
-      sumIncomeNoteEl.textContent = carriedOver > 0
-        ? `${formatCurrency(Math.round(totalIncome), userCurrency)} income + ${formatCurrency(Math.round(carriedOver), userCurrency)} carried over`
-        : 'Total income this month';
-    }
-    if (sumBudgetZarEl) sumBudgetZarEl.textContent = formatCurrency(Math.round(zarBudgetTotal), userCurrency);
-    if (sumActualZarEl) sumActualZarEl.textContent = formatCurrency(Math.round(zarActualTotal), userCurrency);
-    if (sumVarianceZarEl) {
-      const varianceFormatted = formatCurrency(Math.round(Math.abs(zarVariance)), userCurrency);
-      sumVarianceZarEl.textContent = zarVariance >= 0 
-        ? `+${varianceFormatted} over` 
-        : `${varianceFormatted} under`;
-      sumVarianceZarEl.style.color = zarVariance > 0 ? 'var(--red)' : 'var(--accent)';
-    }
-    if (sumNetZarEl) {
-      sumNetZarEl.textContent = formatCurrency(Math.round(zarNet), userCurrency);
-      sumNetZarEl.className = 'val ' + (zarNet >= 0 ? 'green' : 'red');
-    }
-    if (sumNetNoteEl) {
-      const netFormatted = formatCurrency(Math.round(Math.abs(zarNet)), userCurrency);
-      sumNetNoteEl.textContent = zarNet >= 0 
-        ? `Surplus: ${netFormatted}` 
-        : `Deficit: ${netFormatted}`;
-      sumNetNoteEl.style.color = zarNet >= 0 ? 'var(--accent)' : 'var(--red)';
-    }
-
-    // Update ZAR to GBP conversion
-    updateZarToGbpConversion();
-  }
-
-
 
   async function updateExchangeRate() {
-    if (!userSettings.show_currency_conversion) {
+    if (!showCurrencyConversion) {
       return;
     }
     
     try {
-      const baseCurrency = userSettings.base_currency || 'ZAR';
-      const conversionCurrency = userSettings.conversion_currency || 'GBP';
-      
       // Using exchangerate-api.com free tier (no API key needed for basic usage)
-      const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
+      // Fetching exchange rate from user's currency to conversion currency
+      const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${userCurrency}`);
       const data = await response.json();
       
       if (data && data.rates && data.rates[conversionCurrency]) {
         exchangeRate = parseFloat(data.rates[conversionCurrency]);
         const rateEl = document.getElementById('exchangeRate');
-        const baseSymbol = getCurrencySymbol(baseCurrency as CurrencyCode);
-        const convSymbol = getCurrencySymbol(conversionCurrency as CurrencyCode);
-        
+        const conversionSym = getCurrencySymbol(conversionCurrency);
         if (rateEl) {
-          rateEl.textContent = `1 ${baseCurrency} = ${convSymbol}${exchangeRate.toFixed(4)}`;
+          rateEl.textContent = `1 ${userCurrency} = ${conversionSym}${exchangeRate.toFixed(4)}`;
           rateEl.style.color = 'var(--accent)';
         }
-        updateZarToGbpConversion();
+        updateYearConversions();
       } else {
         throw new Error('Exchange rate data not available');
       }
@@ -1266,160 +578,60 @@ import { supabase } from '../lib/supabase';
         rateEl.textContent = 'Error loading rate';
         rateEl.style.color = 'var(--red)';
       }
-      // Fallback to a default rate if API fails
+      // Fallback to a default rate
       exchangeRate = 0.042;
-      updateZarToGbpConversion();
+      updateYearConversions();
     }
   }
 
-  function updateZarToGbpConversion() {
-    if (!userSettings.show_currency_conversion) {
+  function updateYearConversions() {
+    if (!showCurrencyConversion) {
       return;
     }
     
-    const baseCurrency = (userSettings.base_currency || 'ZAR') as CurrencyCode;
-    const conversionCurrency = (userSettings.conversion_currency || 'GBP') as CurrencyCode;
-    const baseSymbol = getCurrencySymbol(baseCurrency);
-    const convSymbol = getCurrencySymbol(conversionCurrency);
-    
-    const zarBudgetTotal = zarBudgets.reduce((a: number, b: number) => a + b, 0);
-    const zarActualTotal = zarActuals.reduce((a: number, b: number) => a + b, 0);
-    const zarNetTotal = totalIncome + carriedOver - zarActualTotal;
+    const conversionSym = getCurrencySymbol(conversionCurrency);
     
     // Budget conversion
-    const zarBudgetEl = document.getElementById('zarBudgetForConversion');
-    const zarBudgetGbpEl = document.getElementById('zarBudgetConvertedGbp');
-    const budgetBaseAmountEl = document.getElementById('budgetBaseAmount');
-    const budgetConvAmountEl = document.getElementById('budgetConvAmount');
-    
-    if (zarBudgetEl) {
-      zarBudgetEl.textContent = Math.round(zarBudgetTotal).toLocaleString();
+    const yearBudgetZarEl = document.getElementById('yearBudgetZar');
+    const yearBudgetGbpEl = document.getElementById('yearBudgetGbp');
+    if (yearBudgetZarEl) {
+      yearBudgetZarEl.textContent = formatCurrency(Math.round(yearBudget), userCurrency);
     }
-    if (budgetBaseAmountEl) {
-      budgetBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarBudgetForConversion">${Math.round(zarBudgetTotal).toLocaleString()}</span>`;
-    }
-    if (zarBudgetGbpEl && exchangeRate > 0) {
-      const converted = zarBudgetTotal * exchangeRate;
-      zarBudgetGbpEl.textContent = converted.toFixed(2);
-    }
-    if (budgetConvAmountEl && exchangeRate > 0) {
-      const converted = zarBudgetTotal * exchangeRate;
-      budgetConvAmountEl.innerHTML = `${convSymbol}<span id="zarBudgetConvertedGbp">${converted.toFixed(2)}</span>`;
+    if (yearBudgetGbpEl && exchangeRate > 0) {
+      const converted = yearBudget * exchangeRate;
+      yearBudgetGbpEl.textContent = `${conversionSym}${converted.toFixed(2)}`;
     }
     
     // Actual conversion
-    const zarActualEl = document.getElementById('zarActualForConversion');
-    const zarActualGbpEl = document.getElementById('zarActualConvertedGbp');
-    const actualBaseAmountEl = document.getElementById('actualBaseAmount');
-    const actualConvAmountEl = document.getElementById('actualConvAmount');
-    
-    if (zarActualEl) {
-      zarActualEl.textContent = Math.round(zarActualTotal).toLocaleString();
+    const yearActualZarEl = document.getElementById('yearActualZar');
+    const yearActualGbpEl = document.getElementById('yearActualGbp');
+    if (yearActualZarEl) {
+      yearActualZarEl.textContent = formatCurrency(Math.round(yearActual), userCurrency);
     }
-    if (actualBaseAmountEl) {
-      actualBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarActualForConversion">${Math.round(zarActualTotal).toLocaleString()}</span>`;
-    }
-    if (zarActualGbpEl && exchangeRate > 0) {
-      const converted = zarActualTotal * exchangeRate;
-      zarActualGbpEl.textContent = converted.toFixed(2);
-    }
-    if (actualConvAmountEl && exchangeRate > 0) {
-      const converted = zarActualTotal * exchangeRate;
-      actualConvAmountEl.innerHTML = `${convSymbol}<span id="zarActualConvertedGbp">${converted.toFixed(2)}</span>`;
+    if (yearActualGbpEl && exchangeRate > 0) {
+      const converted = yearActual * exchangeRate;
+      yearActualGbpEl.textContent = `${conversionSym}${converted.toFixed(2)}`;
     }
     
     // Net conversion
-    const zarNetEl = document.getElementById('zarNetForConversion');
-    const zarNetGbpEl = document.getElementById('zarNetConvertedGbp');
-    const netBaseAmountEl = document.getElementById('netBaseAmount');
-    const netConvAmountEl = document.getElementById('netConvAmount');
-    
-    if (zarNetEl) {
-      zarNetEl.textContent = Math.round(zarNetTotal).toLocaleString();
+    const yearNetZarEl = document.getElementById('yearNetZar');
+    const yearNetGbpEl = document.getElementById('yearNetGbp');
+    if (yearNetZarEl) {
+      yearNetZarEl.textContent = formatCurrency(Math.round(yearNet), userCurrency);
     }
-    if (netBaseAmountEl) {
-      netBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarNetForConversion">${Math.round(zarNetTotal).toLocaleString()}</span>`;
-    }
-    if (zarNetGbpEl && exchangeRate > 0) {
-      const converted = zarNetTotal * exchangeRate;
-      zarNetGbpEl.textContent = converted.toFixed(2);
-      zarNetGbpEl.style.color = zarNetTotal >= 0 ? 'var(--accent)' : 'var(--red)';
-    }
-    if (netConvAmountEl && exchangeRate > 0) {
-      const converted = zarNetTotal * exchangeRate;
-      netConvAmountEl.innerHTML = `${convSymbol}<span id="zarNetConvertedGbp">${converted.toFixed(2)}</span>`;
-      netConvAmountEl.style.color = zarNetTotal >= 0 ? 'var(--accent)' : 'var(--red)';
-    }
-  }
-
-  async function copyFromLastMonth() {
-    const confirmed = await showConfirm(
-      'Copy Last Month',
-      'Copy all budget amounts from the previous month into this month? This will overwrite any existing budget values for this month.',
-      'Copy',
-      false
-    );
-    if (!confirmed) return;
-
-    const prevMonthDate = new Date(currentMonth);
-    prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
-    const prevMonth = prevMonthDate.toISOString().slice(0, 7) + '-01';
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Load previous month's budgets
-      const { data: prevBudgets, error } = await supabase
-        .from('budgets')
-        .select('category_id, budget_amount')
-        .eq('month', prevMonth)
-        .eq('user_id', user?.id);
-
-      if (error) throw error;
-
-      if (!prevBudgets || prevBudgets.length === 0) {
-        showToast('No budget data found for previous month', 'error');
-        return;
-      }
-
-      // Upsert into current month
-      const upserts = prevBudgets.map(b => ({
-        category_id: b.category_id,
-        month: currentMonth,
-        budget_amount: b.budget_amount,
-        actual_amount: 0,
-        user_id: user?.id
-      }));
-
-      const { error: upsertError } = await supabase
-        .from('budgets')
-        .upsert(upserts, { onConflict: 'category_id,month,user_id' });
-
-      if (upsertError) throw upsertError;
-
-      showToast('Budget copied from previous month');
-      await loadMonth();
-    } catch (error: any) {
-      showToast('Error copying budget: ' + error.message, 'error');
+    if (yearNetGbpEl && exchangeRate > 0) {
+      const converted = yearNet * exchangeRate;
+      yearNetGbpEl.textContent = `${conversionSym}${converted.toFixed(2)}`;
+      yearNetGbpEl.style.color = yearNet >= 0 ? 'var(--accent)' : 'var(--red)';
     }
   }
 
   // Make functions available globally
-  window.onBudgetChange = onBudgetChange;
-  window.onActualChange = onActualChange;
-  window.copyBudgetToActual = copyBudgetToActual;
-  window.clearActual = clearActual;
-  window.updateBalance = updateBalance;
-  window.addIncomeSource = addIncomeSource;
-  window.removeIncomeSource = removeIncomeSource;
-  window.updateIncomeAmount = updateIncomeAmount;
-  window.updateIncomeSourceName = updateIncomeSourceName;
+  window.loadYear = loadYear;
   window.updateExchangeRate = updateExchangeRate;
-  window.toggleGroup = toggleGroup;
-  window.loadMonth = loadMonth;
   window.handleSignOut = handleSignOut;
-  window.changeMonth = changeMonth;
-  window.copyFromLastMonth = copyFromLastMonth;
+  window.changeFY = changeFY;
+  window.toggleTheme = toggleTheme;
 
   // Initialize on load
   if (document.readyState === 'loading') {
@@ -1430,139 +642,181 @@ import { supabase } from '../lib/supabase';
 </script>
 
 <style is:global>
-  /* Page-specific styles for index.astro */
+  /* Page-specific styles for index.astro (yearly overview) */
+
+  /* Override base page width for wider yearly layout */
+  html, body {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+  }
+
+  body {
+    background: var(--bg) !important;
+  }
+
+  .page {
+    max-width: 1100px;
+    background: var(--bg) !important;
+  }
 
   h1 {
     font-family: 'Fraunces', serif;
     font-size: clamp(36px, 6vw, 64px);
     font-weight: 700;
     line-height: 1;
-    color: var(--text);
+    color: var(--text) !important;
     letter-spacing: -0.02em;
   }
 
   h1 span {
-    color: var(--accent);
+    color: var(--accent) !important;
   }
 
-  .currency-toggle {
-    display: flex;
-    gap: 8px;
-    margin-top: 20px;
-    flex-wrap: wrap;
+  /* Override summary grid columns for wider layout */
+  .summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 
-  .budget-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .budget-table tr {
-    border-bottom: 1px solid var(--border);
-    transition: background 0.1s;
-  }
-
-  .budget-table tr:hover { background: var(--surface2); }
-
-  .budget-table tr.total-row {
-    border-top: 2px solid var(--border);
-    background: var(--surface2);
-  }
-
-  .budget-table tr.group-header {
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .budget-table tr.group-header:hover {
+  /* Override summary card to use !important (combats Astro scoping) */
+  .summary-card {
     background: var(--surface) !important;
   }
 
-  .budget-table td {
-    padding: 9px 8px;
-    vertical-align: middle;
+  /* Override balance-section: no bottom margin on year page */
+  .balance-section {
+    margin-bottom: 0;
   }
 
-  .budget-table .cat { color: var(--text); }
-  .budget-table .budget-val { text-align: right; font-weight: 500; color: var(--accent); }
-  .budget-table .budget-val.warn { color: var(--accent2); }
-  .budget-table .budget-val.over { color: var(--red); }
-
-  .input-cell {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
-  }
-
-  .budget-input-dark {
-    background: var(--surface2) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    width: 80px !important;
-    text-align: right !important;
-    padding: 4px 8px !important;
-    border-radius: 4px !important;
-    outline: none !important;
-    transition: border-color 0.15s;
-    -webkit-appearance: none;
-    -moz-appearance: textfield;
-  }
-  .budget-input-dark:focus {
-    border-color: var(--accent) !important;
-    outline: none !important;
-    background: var(--surface2) !important;
-  }
-  .budget-input-dark::-webkit-outer-spin-button,
-  .budget-input-dark::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  
-  /* Ensure inputs don't have white background */
-  input[type="number"].budget-input-dark {
-    background-color: var(--surface2) !important;
-    background: var(--surface2) !important;
-  }
-
-  .fixed-label {
-    display: inline-block !important;
-    background: var(--surface2) !important;
-    border: 1px solid var(--accent) !important;
-    padding: 2px 8px !important;
-    font-size: 10px !important;
-    color: var(--accent) !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-    border-radius: 3px !important;
-    font-weight: 500 !important;
-    margin-left: 8px !important;
-    vertical-align: middle !important;
-    line-height: 1.4 !important;
-    font-family: 'DM Mono', monospace !important;
-  }
-
-  .currency-sym {
-    color: var(--muted);
-    font-size: 11px;
-    flex-shrink: 0;
-  }
-
-  .tag {
-    display: inline-block;
+  input[type="number"] {
     background: var(--surface2);
     border: 1px solid var(--border);
-    padding: 2px 8px;
-    font-size: 10px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: border-color 0.15s;
+  }
+  input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  #monthlyBreakdown {
+    margin-bottom: 48px;
+  }
+
+  #monthsContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1px;
+    background: var(--border) !important;
+    border: 1px solid var(--border) !important;
+    margin-top: 0;
+  }
+
+  .month-card {
+    background: var(--surface) !important;
+    padding: 20px;
+    transition: background 0.15s;
+    cursor: pointer;
+    border: none;
+  }
+
+  .month-card:hover {
+    background: var(--surface2) !important;
+  }
+
+  .month-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .month-header h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--text-dim) !important;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .month-link {
     color: var(--muted);
+    font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    margin-left: 6px;
-    vertical-align: middle;
+    font-family: 'DM Mono', monospace;
+    transition: color 0.15s;
   }
-  .tag.ok { border-color: var(--accent); color: var(--accent); }
+
+  .month-card:hover .month-link {
+    color: var(--accent);
+  }
+
+  .month-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 24px;
+    margin-bottom: 18px;
+  }
+
+  .month-stat {
+    text-align: left;
+  }
+
+  .month-stat .label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted) !important;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .stat-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text) !important;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+
+  .stat-val.green { color: var(--accent) !important; }
+  .stat-val.red { color: var(--red) !important; }
+
+  .month-variance {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    margin-top: 0;
+  }
+
+  .month-variance .label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .variance-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent) !important;
+  }
+
+  .variance-val.over { color: var(--red) !important; }
+  .variance-val.ok { color: var(--accent) !important; }
+
 </style>
 </html>

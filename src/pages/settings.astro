@@ -22,8 +22,7 @@ import { supabase } from '../lib/supabase';
     
     <!-- Navigation -->
     <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-      <a href="/" class="currency-btn" style="text-decoration: none; display: inline-block;">← Back to Budget</a>
-      <a href="/year" class="currency-btn" style="text-decoration: none; display: inline-block;">Yearly Overview</a>
+      <a href="/" class="currency-btn" style="text-decoration: none; display: inline-block;">← Back to Overview</a>
       <div id="currentUserEmail" style="margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Signed in user">Loading account...</div>
       <button class="currency-btn" onclick="handleSignOut()" style="color: var(--red);" title="Sign Out">Sign Out</button>
     </div>
@@ -83,14 +82,34 @@ import { supabase } from '../lib/supabase';
 
 </div>
 
+<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">☀ Light</button>
+
 <script>
   import { supabase } from '../lib/supabase';
   import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
   import { showToast, showConfirm, showPrompt } from '../lib/dialogs';
   import type { User } from '@supabase/supabase-js';
 
+  function applyTheme(theme: string) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.textContent = theme === 'light' ? '☾ Dark' : '☀ Light';
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', next);
+    applyTheme(next);
+  }
+
+  // Apply saved theme immediately on load
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  applyTheme(savedTheme);
+
   let categories = [];
   let settings = {};
+  let userCurrency = 'ZAR';
 
   // Check authentication on page load
   async function checkAuth() {
@@ -155,35 +174,33 @@ import { supabase } from '../lib/supabase';
     try {
       const user = await getCurrentUser();
       if (!user) return;
-      
-      // Load all user_settings
-      const { data, error } = await supabase
+
+      const { data: settingsRows } = await supabase
         .from('user_settings')
-        .select('preferred_currency, key, value')
+        .select('key, value, preferred_currency')
         .eq('user_id', user.id);
-      
-      if (error && error.code !== 'PGRST116') throw error;
-      
-      const preferredCurrency = data?.find(s => s.preferred_currency)?.preferred_currency || 'ZAR';
-      const showConversion = data?.find(s => s.key === 'show_currency_conversion')?.value === 'true';
-      const conversionCurrency = data?.find(s => s.key === 'conversion_currency')?.value || 'GBP';
-      
+
+      const settingsMap = Object.fromEntries((settingsRows || []).map(s => [s.key, s.value]));
+      userCurrency = settingsRows?.[0]?.preferred_currency || 'ZAR';
+      const showConversion = settingsMap['show_currency_conversion'] === 'true';
+      const conversionCurrency = settingsMap['conversion_currency'] || 'GBP';
+
       // Set UI values
       const preferredCurrencySelect = document.getElementById('preferredCurrency');
       if (preferredCurrencySelect) {
-        preferredCurrencySelect.value = preferredCurrency;
+        preferredCurrencySelect.value = userCurrency;
       }
-      
+
       const showConversionCheckbox = document.getElementById('showConversion');
       if (showConversionCheckbox) {
         showConversionCheckbox.checked = showConversion;
       }
-      
+
       const conversionCurrencySelect = document.getElementById('conversionCurrency');
       if (conversionCurrencySelect) {
         conversionCurrencySelect.value = conversionCurrency;
       }
-      
+
       updateConversionSettingsVisibility();
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -228,12 +245,12 @@ import { supabase } from '../lib/supabase';
     
     container.innerHTML = '';
     
+    const currencySymbol = getCurrencySymbol(userCurrency);
+
     categories.forEach(cat => {
       const div = document.createElement('div');
       div.className = 'category-item';
       div.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;';
-      
-      const currencySymbol = getCurrencySymbol(cat.currency || 'ZAR');
       
       div.innerHTML = `
         <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
@@ -245,26 +262,26 @@ import { supabase } from '../lib/supabase';
                  onchange="updateCategoryName('${cat.id}', this.value)">
           <div style="display: flex; gap: 12px; align-items: center; font-size: 10px; color: var(--text-dim);">
             <span>Type: ${cat.type || 'variable'}</span>
-            <span>Currency: ${cat.currency || 'ZAR'}</span>
             ${cat.category_group ? `<span>Group: ${escapeHtml(cat.category_group)}</span>` : ''}
-            ${cat.monthly_amount ? `<span>Default: ${currencySymbol}${parseFloat(cat.monthly_amount || 0).toLocaleString()}</span>` : ''}
           </div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <select data-id="${cat.id}" 
-                  class="category-currency-select"
-                  style="background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 4px; cursor: pointer;"
-                  onchange="updateCategoryCurrency('${cat.id}', this.value)">
-            <option value="ZAR" ${cat.currency === 'ZAR' ? 'selected' : ''}>ZAR</option>
-            <option value="GBP" ${cat.currency === 'GBP' ? 'selected' : ''}>GBP</option>
-            <option value="USD" ${cat.currency === 'USD' ? 'selected' : ''}>USD</option>
-            <option value="EUR" ${cat.currency === 'EUR' ? 'selected' : ''}>EUR</option>
-          </select>
-          <button onclick="deleteCategory('${cat.id}')" 
-                  style="background: var(--red); border: 1px solid var(--red); color: white; font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px; cursor: pointer; border-radius: 4px; transition: all 0.15s;"
-                  onmouseover="this.style.opacity='0.8'"
-                  onmouseout="this.style.opacity='1'">Delete</button>
+        <div style="display: flex; flex-direction: column; gap: 2px; align-items: flex-end; flex-shrink: 0;">
+          <label style="color: var(--text-dim); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Default budget</label>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <span style="color: var(--muted); font-size: 11px;">${currencySymbol}</span>
+            <input type="number"
+                   value="${parseFloat(cat.monthly_amount || 0)}"
+                   class="category-default-input"
+                   style="background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 10px; border-radius: 4px; width: 100px; text-align: right;"
+                   onchange="updateCategoryDefault('${cat.id}', this.value)"
+                   onblur="updateCategoryDefault('${cat.id}', this.value)"
+                   placeholder="0">
+          </div>
         </div>
+        <button onclick="deleteCategory('${cat.id}')" 
+                style="background: var(--red); border: 1px solid var(--red); color: white; font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px; cursor: pointer; border-radius: 4px; transition: all 0.15s; flex-shrink: 0;"
+                onmouseover="this.style.opacity='0.8'"
+                onmouseout="this.style.opacity='1'">Delete</button>
       `;
       
       container.appendChild(div);
@@ -354,11 +371,12 @@ import { supabase } from '../lib/supabase';
     }
   }
 
-  async function updateCategoryCurrency(categoryId, newCurrency) {
+  async function updateCategoryDefault(categoryId, value) {
+    const amount = parseFloat(value) || 0;
     try {
       const { error } = await supabase
         .from('categories')
-        .update({ currency: newCurrency })
+        .update({ monthly_amount: amount })
         .eq('id', categoryId);
       
       if (error) throw error;
@@ -366,14 +384,11 @@ import { supabase } from '../lib/supabase';
       // Update local array
       const index = categories.findIndex(c => c.id === categoryId);
       if (index !== -1) {
-        categories[index].currency = newCurrency;
+        categories[index].monthly_amount = amount;
       }
-      
-      // Re-render to update currency symbol
-      renderCategories();
     } catch (error) {
-      console.error('Error updating category currency:', error);
-      showToast('Error updating category currency: ' + error.message, 'error');
+      console.error('Error updating category default:', error);
+      showToast('Error updating default budget: ' + error.message, 'error');
       await loadCategories(); // Reload on error
     }
   }
@@ -390,8 +405,6 @@ import { supabase } from '../lib/supabase';
 
     const isFixed = await showConfirm('Category Type', 'Is this a fixed monthly expense?', 'Yes, fixed');
     const type = isFixed ? 'fixed' : 'variable';
-    const preferredCurrencySelect = document.getElementById('preferredCurrency');
-    const currency = preferredCurrencySelect?.value || 'ZAR';
 
     try {
       const { data, error } = await supabase
@@ -399,7 +412,6 @@ import { supabase } from '../lib/supabase';
         .insert({
           name: name,
           type: type,
-          currency: currency,
           monthly_amount: 0,
           user_id: user.id
         })
@@ -464,11 +476,12 @@ import { supabase } from '../lib/supabase';
   }
 
   window.updateCategoryName = updateCategoryName;
-  window.updateCategoryCurrency = updateCategoryCurrency;
+  window.updateCategoryDefault = updateCategoryDefault;
   window.addNewCategory = addNewCategory;
   window.deleteCategory = deleteCategory;
   window.saveCurrencySettings = saveCurrencySettings;
   window.handleSignOut = handleSignOut;
+  window.toggleTheme = toggleTheme;
 
   // Initialize on load
   if (document.readyState === 'loading') {
@@ -511,7 +524,7 @@ import { supabase } from '../lib/supabase';
     border-color: var(--accent);
   }
 
-  .category-currency-select:focus {
+  .category-default-input:focus {
     outline: none;
     border-color: var(--accent);
   }
