@@ -138,7 +138,30 @@
     </div>
   </div>
 
+  <!-- ── Commit to Month Button ────────────────────────────────────────────── -->
+  <div id="commitSection" style="display: none; margin-top: 48px; text-align: center;">
+    <button id="commitBtn" class="commit-btn" onclick="openCommitModal()" disabled>
+      Commit to Month
+    </button>
+  </div>
+
   <footer>Budget Tracker · Transaction Import &amp; Categorization</footer>
+</div>
+
+<!-- ── Commit Modal ────────────────────────────────────────────────────────── -->
+<div id="commitModal" style="display:none; position:fixed; inset:0; z-index:9997; background:rgba(0,0,0,0.6); backdrop-filter:blur(2px);" onclick="closeCommitModal(event)">
+  <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:32px; min-width:400px; max-width:520px; width:90%;">
+    <h2 style="font-family:'Fraunces',serif; font-size:22px; font-weight:300; font-style:italic; color:var(--text); margin-bottom:24px;">Commit to Month</h2>
+    <div style="margin-bottom:20px;">
+      <label style="color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; display:block; margin-bottom:8px;">Select Month</label>
+      <input type="month" id="commitMonthInput" class="balance-input" style="width:200px;">
+    </div>
+    <div id="commitSummary" style="margin-bottom:24px; padding:16px; background:var(--surface2); border:1px solid var(--border); border-radius:4px; font-size:11px; color:var(--text-dim);"></div>
+    <div style="display:flex; gap:12px; justify-content:flex-end;">
+      <button onclick="closeCommitModal()" class="currency-btn">Cancel</button>
+      <button onclick="confirmCommit()" class="currency-btn" style="color:var(--accent); border-color:var(--accent);">Confirm Commit</button>
+    </div>
+  </div>
 </div>
 
 <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">☀ Light</button>
@@ -158,6 +181,7 @@
     description: string;
     amount: number;
     category: string | null;
+    category_id: string | null;
   }
 
   interface Category {
@@ -173,6 +197,7 @@
 
   /** Unified spreadsheet column — either an expense category or an income source. */
   interface SheetColumn {
+    id:    string;
     name:  string;
     type:  'expense' | 'income';
     group: string | null;
@@ -184,6 +209,9 @@
       resetUpload: () => void;
       handleSignOut: () => Promise<void>;
       toggleTheme: () => void;
+      openCommitModal: () => void;
+      closeCommitModal: (event?: MouseEvent) => void;
+      confirmCommit: () => Promise<void>;
     }
   }
 
@@ -198,8 +226,8 @@
   /** Flat ordered list of all spreadsheet columns (expense categories then income sources). */
   function allColumns(): SheetColumn[] {
     return [
-      ...categories.map(c => ({ name: c.name, type: 'expense' as const, group: c.category_group })),
-      ...incomeSources.map(s => ({ name: s.name, type: 'income'  as const, group: null })),
+      ...categories.map(c => ({ id: c.id, name: c.name, type: 'expense' as const, group: c.category_group })),
+      ...incomeSources.map(s => ({ id: s.id, name: s.name, type: 'income'  as const, group: null })),
     ];
   }
 
@@ -521,6 +549,7 @@
         description: desc || '(no description)',
         amount,
         category:    null,
+        category_id: null,
       });
     });
 
@@ -543,7 +572,7 @@
     renderTable();
 
     // Show dependent sections
-    ['tableSection', 'shortcutsSection', 'totalsSection'].forEach(id => {
+    ['tableSection', 'shortcutsSection', 'totalsSection', 'commitSection'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'block';
     });
@@ -553,6 +582,7 @@
 
     updateProgress();
     renderTotals();
+    checkCommitReady();
 
     // Set initial active cell and focus the table so keyboard events work immediately
     setTimeout(() => {
@@ -578,7 +608,7 @@
     const errorEl = document.getElementById('uploadError');
     if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
 
-    ['mappingSection', 'tableSection', 'shortcutsSection', 'totalsSection'].forEach(id => {
+    ['mappingSection', 'tableSection', 'shortcutsSection', 'totalsSection', 'commitSection'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
@@ -736,7 +766,8 @@
     const cat         = cols[activeCategoryIndex];
     const prevCategory = tx.category;
 
-    tx.category = cat.name;
+    tx.category    = cat.name;
+    tx.category_id = cat.id;
 
     // Update only the cat-cells in this single row — no full re-render
     const rowEl = document.querySelector<HTMLTableRowElement>(`tr[data-row="${activeRow}"]`);
@@ -752,6 +783,7 @@
 
     updateProgress();
     renderTotals();
+    checkCommitReady();
 
     // Advance to next row
     if (activeRow < transactions.length - 1) {
@@ -767,7 +799,8 @@
     const old = tx.category;
     if (!old) return;
 
-    tx.category = null;
+    tx.category    = null;
+    tx.category_id = null;
 
     const rowEl = document.querySelector<HTMLTableRowElement>(`tr[data-row="${activeRow}"]`);
     if (rowEl) {
@@ -779,6 +812,7 @@
     updateSingleFootTotal(old);
     updateProgress();
     renderTotals();
+    checkCommitReady();
   }
 
   /** Recompute and update one column's footer total. */
@@ -948,6 +982,129 @@
     return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // ─── Commit to Month ──────────────────────────────────────────────────────
+
+  /** Enable the Commit button only when every transaction has a category_id. */
+  function checkCommitReady() {
+    const btn = document.getElementById('commitBtn') as HTMLButtonElement | null;
+    if (!btn) return;
+    const allCategorised = transactions.length > 0 &&
+      transactions.every(tx => tx.category_id !== null);
+    btn.disabled = !allCategorised;
+  }
+
+  /** Build and display the per-category commit summary inside the modal. */
+  function buildCommitSummary() {
+    const summaryEl = document.getElementById('commitSummary');
+    if (!summaryEl) return;
+
+    const expenseCategoryIds = new Set(categories.map(c => c.id));
+    const grouped: Record<string, number> = {};
+
+    transactions.forEach(tx => {
+      if (!tx.category_id) return;
+      if (!expenseCategoryIds.has(tx.category_id)) return; // skip income sources
+      grouped[tx.category_id] = (grouped[tx.category_id] || 0) + tx.amount;
+    });
+
+    const entries = Object.entries(grouped);
+    if (entries.length === 0) {
+      summaryEl.textContent = 'No expense categories to commit.';
+      return;
+    }
+
+    let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+    entries.forEach(([catId, total]) => {
+      const cat  = categories.find(c => c.id === catId);
+      const name = cat?.name ?? catId;
+      const color = total < 0 ? 'var(--red)' : 'var(--accent)';
+      html += `<div style="display:flex; justify-content:space-between; align-items:center;">`;
+      html += `<span>${escHtml(name)}</span>`;
+      html += `<span style="font-family:'DM Mono',monospace; color:${color};">${escHtml(fmtAmt(total))}</span>`;
+      html += `</div>`;
+    });
+    html += '</div>';
+    summaryEl.innerHTML = html;
+  }
+
+  /** Open the commit modal, defaulting to the current calendar month. */
+  function openCommitModal() {
+    const now   = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const input = document.getElementById('commitMonthInput') as HTMLInputElement | null;
+    if (input) input.value = month;
+
+    buildCommitSummary();
+
+    const modal = document.getElementById('commitModal');
+    if (modal) modal.style.display = 'block';
+  }
+
+  /** Close on backdrop click or cancel button press. */
+  function closeCommitModal(event?: MouseEvent) {
+    if (event && (event.target as HTMLElement).id !== 'commitModal') return;
+    const modal = document.getElementById('commitModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  /** Upsert summed actuals per category into the budgets table. */
+  async function confirmCommit() {
+    const input = document.getElementById('commitMonthInput') as HTMLInputElement | null;
+    const selectedMonth = input?.value;
+    if (!selectedMonth) {
+      showToast('Please select a month.', 'error');
+      return;
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      showToast('Not authenticated.', 'error');
+      return;
+    }
+
+    // Group transactions by expense category_id only
+    const expenseCategoryIds = new Set(categories.map(c => c.id));
+    const grouped: Record<string, number> = {};
+
+    transactions.forEach(tx => {
+      if (!tx.category_id) return;
+      if (!expenseCategoryIds.has(tx.category_id)) return;
+      grouped[tx.category_id] = (grouped[tx.category_id] || 0) + tx.amount;
+    });
+
+    const entries = Object.entries(grouped);
+    if (entries.length === 0) {
+      showToast('No expense categories to commit.', 'error');
+      return;
+    }
+
+    const upsertRows = entries.map(([catId, total]) => ({
+      category_id:   catId,
+      month:         `${selectedMonth}-01`,
+      actual_amount: Math.abs(total),
+      user_id:       user.id,
+    }));
+
+    const { error } = await supabase
+      .from('budgets')
+      .upsert(upsertRows, { onConflict: 'category_id,month,user_id' });
+
+    if (error) {
+      showToast('Error committing actuals: ' + error.message, 'error');
+      return;
+    }
+
+    // Format month name for toast: e.g. "March 2026"
+    const [yr, mo] = selectedMonth.split('-');
+    const monthName = new Date(parseInt(yr), parseInt(mo) - 1, 1)
+      .toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    showToast(`Actuals committed to ${monthName}`, 'success');
+
+    const modal = document.getElementById('commitModal');
+    if (modal) modal.style.display = 'none';
+  }
+
   // ─── Init ─────────────────────────────────────────────────────────────────
 
   async function init() {
@@ -1002,6 +1159,9 @@
   window.resetUpload        = resetUpload;
   window.handleSignOut      = handleSignOut;
   window.toggleTheme        = toggleTheme;
+  window.openCommitModal    = openCommitModal;
+  window.closeCommitModal   = closeCommitModal;
+  window.confirmCommit      = confirmCommit;
 
   // Kick off initialization
   if (document.readyState === 'loading') {
@@ -1164,6 +1324,34 @@
   }
 
   .cat-total { text-align: right !important; }
+
+  /* ── Commit button ───────────────────────────────────────────────────────── */
+
+  .commit-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 12px 28px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, opacity 0.15s;
+  }
+
+  .commit-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .commit-btn:not(:disabled) {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
 </style>
 
 </html>
