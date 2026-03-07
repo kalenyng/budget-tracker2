@@ -1,0 +1,695 @@
+---
+// Settings page
+import { supabase } from '../lib/supabase';
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Budget Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="label">Settings</div>
+    <h1>Budget<span> Settings</span></h1>
+    <div class="subtitle">Manage categories and preferences</div>
+    
+    <!-- Navigation -->
+    <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+      <a href="/" class="currency-btn" style="text-decoration: none; display: inline-block;">← Back to Budget</a>
+      <a href="/year" class="currency-btn" style="text-decoration: none; display: inline-block;">Yearly Overview</a>
+      <div id="currentUserEmail" style="margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Signed in user">Loading account...</div>
+      <button class="currency-btn" onclick="handleSignOut()" style="color: var(--red);" title="Sign Out">Sign Out</button>
+    </div>
+  </header>
+
+  <!-- Currency Settings -->
+  <div class="balance-section">
+    <div class="label">Currency Settings</div>
+    <div style="margin-top: 16px;">
+      <div style="margin-bottom: 24px;">
+        <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 8px;">Preferred Currency</label>
+        <select id="preferredCurrency" class="balance-input" style="width: 200px;">
+          <option value="ZAR">ZAR – South African Rand</option>
+          <option value="USD">USD – US Dollar</option>
+          <option value="GBP">GBP – British Pound</option>
+          <option value="EUR">EUR – Euro</option>
+        </select>
+        <div style="color: var(--text-dim); font-size: 10px; margin-top: 4px;">This currency will be used throughout the app</div>
+      </div>
+      
+      <div style="margin-bottom: 24px;">
+        <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 8px;">
+          <input type="checkbox" id="showConversion">
+          Show Currency Conversion
+        </label>
+        <div id="conversionSettings" style="margin-top: 12px; margin-left: 24px; opacity: 0.5;">
+          <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 8px;">Convert to</label>
+          <select id="conversionCurrency" class="balance-input" style="width: 200px;">
+            <option value="GBP">GBP (British Pound)</option>
+            <option value="USD">USD (US Dollar)</option>
+            <option value="EUR">EUR (Euro)</option>
+            <option value="ZAR">ZAR (South African Rand)</option>
+          </select>
+        </div>
+      </div>
+      
+      <button class="currency-btn" onclick="saveCurrencySettings()" style="margin-top: 8px;">Save Currency Settings</button>
+    </div>
+  </div>
+
+  <!-- Category Management -->
+  <div class="balance-section">
+    <div class="label">Category Management</div>
+    <div style="margin-top: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="color: var(--text-dim); font-size: 11px;">Manage your budget categories</div>
+        <button class="currency-btn" onclick="addNewCategory()" style="font-size: 11px; padding: 6px 12px;">+ Add Category</button>
+      </div>
+      
+      <div id="categoriesList" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Categories will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <footer>Budget Tracker · Settings</footer>
+
+</div>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
+  import { showToast, showConfirm, showPrompt } from '../lib/dialogs';
+  import type { User } from '@supabase/supabase-js';
+
+  let categories = [];
+  let settings = {};
+
+  // Check authentication on page load
+  async function checkAuth() {
+    const user = await getCurrentUser();
+    if (!user) {
+      window.location.href = '/auth';
+      return false;
+    }
+    updateCurrentUserEmail(user);
+    return true;
+  }
+
+  function updateCurrentUserEmail(user: User | null) {
+    const emailEl = document.getElementById('currentUserEmail');
+    if (!emailEl) return;
+    emailEl.textContent = user?.email || 'Signed in';
+    emailEl.title = user?.email || 'Signed in user';
+  }
+
+  // Handle sign out
+  async function handleSignOut() {
+    if (await showConfirm('Sign Out', 'Are you sure you want to sign out?', 'Sign Out')) {
+      await signOut();
+      window.location.href = '/auth';
+    }
+  }
+
+  function showSkeletons() {
+    const categoriesList = document.getElementById('categoriesList');
+    if (categoriesList) {
+      categoriesList.innerHTML = `
+        <div class="skeleton skeleton-row" style="width: 100%;"></div>
+        <div class="skeleton skeleton-row" style="width: 100%;"></div>
+        <div class="skeleton skeleton-row" style="width: 100%;"></div>
+        <div class="skeleton skeleton-row" style="width: 100%;"></div>
+        <div class="skeleton skeleton-row" style="width: 100%;"></div>
+      `;
+    }
+  }
+
+  // Initialize
+  async function init() {
+    onAuthStateChange((_event, session) => {
+      updateCurrentUserEmail(session?.user ?? null);
+      if (!session?.user) {
+        window.location.href = '/auth';
+      }
+    });
+
+    showSkeletons();
+    const isAuthenticated = await checkAuth();
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    await loadSettings();
+    await loadCategories();
+    setupConversionToggle();
+  }
+
+  async function loadSettings() {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+      
+      // Load all user_settings
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('preferred_currency, key, value')
+        .eq('user_id', user.id);
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      const preferredCurrency = data?.find(s => s.preferred_currency)?.preferred_currency || 'ZAR';
+      const showConversion = data?.find(s => s.key === 'show_currency_conversion')?.value === 'true';
+      const conversionCurrency = data?.find(s => s.key === 'conversion_currency')?.value || 'GBP';
+      
+      // Set UI values
+      const preferredCurrencySelect = document.getElementById('preferredCurrency');
+      if (preferredCurrencySelect) {
+        preferredCurrencySelect.value = preferredCurrency;
+      }
+      
+      const showConversionCheckbox = document.getElementById('showConversion');
+      if (showConversionCheckbox) {
+        showConversionCheckbox.checked = showConversion;
+      }
+      
+      const conversionCurrencySelect = document.getElementById('conversionCurrency');
+      if (conversionCurrencySelect) {
+        conversionCurrencySelect.value = conversionCurrency;
+      }
+      
+      updateConversionSettingsVisibility();
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  }
+  
+  function updateConversionSettingsVisibility() {
+    const checkbox = document.getElementById('showConversion');
+    const settingsDiv = document.getElementById('conversionSettings');
+    if (checkbox && settingsDiv) {
+      settingsDiv.style.opacity = checkbox.checked ? '1' : '0.5';
+      settingsDiv.style.pointerEvents = checkbox.checked ? 'auto' : 'none';
+    }
+  }
+
+  async function loadCategories() {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('category_group', { ascending: true, nullsFirst: false })
+        .order('type', { ascending: false })
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      
+      categories = data || [];
+      renderCategories();
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  }
+
+  function renderCategories() {
+    const container = document.getElementById('categoriesList');
+    if (!container) return;
+    
+    if (categories.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-dim); padding: 24px; text-align: center;">No categories found. Add your first category above.</div>';
+      return;
+    }
+    
+    container.innerHTML = '';
+    
+    categories.forEach(cat => {
+      const div = document.createElement('div');
+      div.className = 'category-item';
+      div.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;';
+      
+      const currencySymbol = getCurrencySymbol(cat.currency || 'ZAR');
+      
+      div.innerHTML = `
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <input type="text" 
+                 value="${escapeHtml(cat.name)}" 
+                 data-id="${cat.id}"
+                 class="category-name-input"
+                 style="background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 10px; border-radius: 4px; width: 100%;"
+                 onchange="updateCategoryName('${cat.id}', this.value)">
+          <div style="display: flex; gap: 12px; align-items: center; font-size: 10px; color: var(--text-dim);">
+            <span>Type: ${cat.type || 'variable'}</span>
+            <span>Currency: ${cat.currency || 'ZAR'}</span>
+            ${cat.category_group ? `<span>Group: ${escapeHtml(cat.category_group)}</span>` : ''}
+            ${cat.monthly_amount ? `<span>Default: ${currencySymbol}${parseFloat(cat.monthly_amount || 0).toLocaleString()}</span>` : ''}
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <select data-id="${cat.id}" 
+                  class="category-currency-select"
+                  style="background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 4px; cursor: pointer;"
+                  onchange="updateCategoryCurrency('${cat.id}', this.value)">
+            <option value="ZAR" ${cat.currency === 'ZAR' ? 'selected' : ''}>ZAR</option>
+            <option value="GBP" ${cat.currency === 'GBP' ? 'selected' : ''}>GBP</option>
+            <option value="USD" ${cat.currency === 'USD' ? 'selected' : ''}>USD</option>
+            <option value="EUR" ${cat.currency === 'EUR' ? 'selected' : ''}>EUR</option>
+          </select>
+          <button onclick="deleteCategory('${cat.id}')" 
+                  style="background: var(--red); border: 1px solid var(--red); color: white; font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px; cursor: pointer; border-radius: 4px; transition: all 0.15s;"
+                  onmouseover="this.style.opacity='0.8'"
+                  onmouseout="this.style.opacity='1'">Delete</button>
+        </div>
+      `;
+      
+      container.appendChild(div);
+    });
+  }
+
+
+  async function saveCurrencySettings() {
+    try {
+      const user = await getCurrentUser();
+      if (!user) {
+        showToast('You must be logged in to save settings', 'error');
+        return;
+      }
+      
+      const preferredCurrency = document.getElementById('preferredCurrency').value;
+      const showConversion = document.getElementById('showConversion').checked;
+      const conversionCurrency = document.getElementById('conversionCurrency').value;
+      
+      // Update preferred_currency
+      await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          key: 'preferred_currency',
+          value: preferredCurrency,
+          preferred_currency: preferredCurrency
+        }, {
+          onConflict: 'user_id,key'
+        });
+      
+      // Update show_currency_conversion
+      await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          key: 'show_currency_conversion',
+          value: showConversion.toString()
+        }, {
+          onConflict: 'user_id,key'
+        });
+      
+      // Update conversion_currency
+      await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user.id,
+          key: 'conversion_currency',
+          value: conversionCurrency
+        }, {
+          onConflict: 'user_id,key'
+        });
+      
+      showToast('Currency settings saved');
+      // Reload page to apply currency changes
+      window.location.reload();
+    } catch (error) {
+      console.error('Error saving currency settings:', error);
+      showToast('Error saving currency settings: ' + error.message, 'error');
+    }
+  }
+
+  async function updateCategoryName(categoryId, newName) {
+    if (!newName || newName.trim() === '') {
+      showToast('Category name cannot be empty', 'error');
+      await loadCategories(); // Reload to reset
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .update({ name: newName.trim() })
+        .eq('id', categoryId);
+      
+      if (error) throw error;
+      
+      // Update local array
+      const index = categories.findIndex(c => c.id === categoryId);
+      if (index !== -1) {
+        categories[index].name = newName.trim();
+      }
+    } catch (error) {
+      console.error('Error updating category name:', error);
+      showToast('Error updating category: ' + error.message, 'error');
+      await loadCategories(); // Reload on error
+    }
+  }
+
+  async function updateCategoryCurrency(categoryId, newCurrency) {
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .update({ currency: newCurrency })
+        .eq('id', categoryId);
+      
+      if (error) throw error;
+      
+      // Update local array
+      const index = categories.findIndex(c => c.id === categoryId);
+      if (index !== -1) {
+        categories[index].currency = newCurrency;
+      }
+      
+      // Re-render to update currency symbol
+      renderCategories();
+    } catch (error) {
+      console.error('Error updating category currency:', error);
+      showToast('Error updating category currency: ' + error.message, 'error');
+      await loadCategories(); // Reload on error
+    }
+  }
+
+  async function addNewCategory() {
+    const user = await getCurrentUser();
+    if (!user) {
+      showToast('You must be logged in to add categories', 'error');
+      return;
+    }
+
+    const name = await showPrompt('Add Category', 'e.g. Groceries', 'Add');
+    if (!name) return;
+
+    const isFixed = await showConfirm('Category Type', 'Is this a fixed monthly expense?', 'Yes, fixed');
+    const type = isFixed ? 'fixed' : 'variable';
+    const preferredCurrencySelect = document.getElementById('preferredCurrency');
+    const currency = preferredCurrencySelect?.value || 'ZAR';
+
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({
+          name: name,
+          type: type,
+          currency: currency,
+          monthly_amount: 0,
+          user_id: user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      showToast(`Category "${name}" added`);
+      await loadCategories();
+    } catch (error) {
+      console.error('Error adding category:', error);
+      showToast('Error adding category: ' + error.message, 'error');
+    }
+  }
+
+  async function deleteCategory(categoryId) {
+    const category = categories.find(c => c.id === categoryId);
+    if (!category) return;
+    
+    if (!await showConfirm('Delete Category', `Delete "${category.name}"? This will also delete all associated budgets.`, 'Delete', true)) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', categoryId);
+      
+      if (error) throw error;
+      
+      await loadCategories();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      showToast('Error deleting category: ' + error.message, 'error');
+    }
+  }
+
+  function getCurrencySymbol(currency) {
+    const symbols = {
+      'ZAR': 'R',
+      'GBP': '£',
+      'USD': '$',
+      'EUR': '€'
+    };
+    return symbols[currency] || currency;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Make functions available globally
+  function setupConversionToggle() {
+    const checkbox = document.getElementById('showConversion');
+    if (checkbox) {
+      checkbox.addEventListener('change', updateConversionSettingsVisibility);
+    }
+  }
+
+  window.updateCategoryName = updateCategoryName;
+  window.updateCategoryCurrency = updateCategoryCurrency;
+  window.addNewCategory = addNewCategory;
+  window.deleteCategory = deleteCategory;
+  window.saveCurrencySettings = saveCurrencySettings;
+  window.handleSignOut = handleSignOut;
+
+  // Initialize on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
+
+<style is:global>
+  :root {
+    --bg: #0d0f0e;
+    --surface: #151815;
+    --surface2: #1c201b;
+    --border: #2a2f28;
+    --accent: #c8f560;
+    --accent2: #f5c842;
+    --red: #f56060;
+    --muted: #5a6358;
+    --text: #d8e0d4;
+    --text-dim: #8a9688;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  body {
+    padding: 40px 20px;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 48px;
+  }
+
+  .label {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  h1 span {
+    color: var(--accent);
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .currency-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 14px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.15s;
+  }
+  .currency-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .currency-btn.active { background: var(--accent); color: #0d0f0e; border-color: var(--accent); }
+
+  .balance-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 48px;
+    border-radius: 4px;
+  }
+
+  .balance-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 8px 12px;
+    width: 100%;
+    border-radius: 4px;
+    transition: border-color 0.15s;
+  }
+  .balance-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  select.balance-input {
+    cursor: pointer;
+  }
+
+  .category-item {
+    transition: all 0.15s;
+  }
+
+  .category-item:hover {
+    border-color: var(--accent) !important;
+  }
+
+  .category-name-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .category-currency-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  input[type="checkbox"]:hover {
+    border-color: var(--accent);
+  }
+
+  input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #0d0f0e;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  input[type="checkbox"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(200, 245, 96, 0.2);
+  }
+
+  footer {
+    margin-top: 48px;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -600px 0; }
+    100% { background-position: 600px 0; }
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface2) 25%,
+      var(--border) 50%,
+      var(--surface2) 75%
+    );
+    background-size: 600px 100%;
+    animation: shimmer 1.4s infinite linear;
+    border-radius: 3px;
+  }
+
+  .skeleton-block {
+    height: 14px;
+    margin-bottom: 8px;
+  }
+
+  .skeleton-val {
+    height: 32px;
+    margin-bottom: 6px;
+    width: 60%;
+  }
+
+  .skeleton-row {
+    height: 38px;
+    margin-bottom: 4px;
+    border-radius: 3px;
+  }
+
+  .skeleton-card {
+    background: var(--surface);
+    padding: 24px;
+  }
+</style>
+</html>

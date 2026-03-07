@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget App — AI-Powered Finance Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+<!-- Supabase JS Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0d0f0e;
+    --surface: #151815;
+    --surface2: #1c201b;
+    --border: #2a2f28;
+    --accent: #c8f560;
+    --accent2: #f5c842;
+    --red: #f56060;
+    --muted: #5a6358;
+    --text: #d8e0d4;
+    --text-dim: #8a9688;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 48px;
+  }
+
+  .label {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  h1 span {
+    color: var(--accent);
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .currency-toggle {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .currency-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 14px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.15s;
+  }
+  .currency-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .currency-btn.active { background: var(--accent); color: #0d0f0e; border-color: var(--accent); }
+
+  /* CSV Upload Styles */
+  .upload-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 48px;
+    border-radius: 4px;
+  }
+
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 16px;
+  }
+
+  .upload-area:hover {
+    border-color: var(--accent);
+    background: var(--surface2);
+  }
+
+  .upload-area.dragover {
+    border-color: var(--accent);
+    background: var(--surface2);
+  }
+
+  .upload-area input[type="file"] {
+    display: none;
+  }
+
+  .upload-btn {
+    background: var(--accent);
+    color: #0d0f0e;
+    border: none;
+    padding: 10px 24px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    margin-top: 12px;
+    transition: opacity 0.2s;
+  }
+
+  .upload-btn:hover { opacity: 0.9; }
+  .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .status-message {
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .status-message.success {
+    background: rgba(200, 245, 96, 0.1);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+
+  .status-message.error {
+    background: rgba(245, 96, 96, 0.1);
+    color: var(--red);
+    border: 1px solid var(--red);
+  }
+
+  .status-message.info {
+    background: rgba(245, 200, 66, 0.1);
+    color: var(--accent2);
+    border: 1px solid var(--accent2);
+  }
+
+  /* Category Review Modal */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(13, 15, 14, 0.9);
+    z-index: 1000;
+    overflow-y: auto;
+    padding: 40px 20px;
+  }
+
+  .modal.active {
+    display: block;
+  }
+
+  .modal-content {
+    max-width: 800px;
+    margin: 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 32px;
+    border-radius: 4px;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+
+  .modal-header h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--text);
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .close-btn:hover {
+    color: var(--text);
+  }
+
+  .suggestion-item {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .suggestion-item:last-child {
+    border-bottom: none;
+  }
+
+  .suggestion-info {
+    flex: 1;
+  }
+
+  .suggestion-desc {
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .suggestion-meta {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .suggestion-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .category-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    min-width: 150px;
+  }
+
+  .btn-small {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-small:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+
+  .summary-card {
+    background: var(--surface);
+    padding: 24px;
+  }
+
+  .summary-card .val {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 300;
+    color: var(--text);
+    margin: 6px 0 4px;
+  }
+
+  .summary-card .val.green { color: var(--accent); }
+  .summary-card .val.yellow { color: var(--accent2); }
+  .summary-card .val.red { color: var(--red); }
+
+  .summary-card .note {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .section-title {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .budget-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .budget-table tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  .budget-table tr:hover { background: var(--surface2); }
+
+  .budget-table tr.total-row {
+    border-top: 2px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .budget-table td {
+    padding: 9px 8px;
+    vertical-align: middle;
+  }
+
+  .budget-table .cat { color: var(--text); }
+  .budget-table .avg { color: var(--text-dim); text-align: right; font-size: 11px; }
+  .budget-table .budget-val { text-align: right; font-weight: 500; color: var(--accent); }
+  .budget-table .budget-val.warn { color: var(--accent2); }
+  .budget-table .budget-val.over { color: var(--red); }
+
+  .bar-wrap {
+    width: 80px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  .input-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .budget-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--muted);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    width: 80px;
+    text-align: right;
+    padding: 2px 4px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .budget-input:focus { border-color: var(--accent); }
+  .budget-input.warn { color: var(--accent2); border-color: var(--accent2); }
+  .budget-input.over { color: var(--red); border-color: var(--red); }
+
+  .currency-sym {
+    color: var(--muted);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .note-row td {
+    padding: 4px 8px 10px;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-style: italic;
+    border-bottom: none;
+  }
+
+  .savings-tracker {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    padding: 24px;
+    margin-top: 24px;
+  }
+
+  .savings-bar-outer {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    margin: 16px 0 8px;
+    overflow: hidden;
+  }
+  .savings-bar-inner {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+
+  .savings-nums {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .savings-big {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 300;
+    color: var(--accent);
+    margin: 4px 0;
+  }
+
+  footer {
+    margin-top: 48px;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  .tag {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .tag.flag { border-color: var(--red); color: var(--red); }
+  .tag.ok { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="label">Personal finance · AI-powered categorization</div>
+    <h1>Budget<span> Tracker</span></h1>
+    <div class="subtitle">Upload CSV files to automatically categorize transactions</div>
+    <div class="currency-toggle">
+      <span class="label" style="margin:0;line-height:2">View in:</span>
+      <button class="currency-btn active" onclick="setCurrency('both')">Both</button>
+      <button class="currency-btn" onclick="setCurrency('gbp')">GBP only</button>
+      <button class="currency-btn" onclick="setCurrency('zar')">ZAR only</button>
+    </div>
+  </header>
+
+  <!-- CSV Upload Section -->
+  <div class="upload-section">
+    <div class="label">Upload Transaction CSV</div>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+      <div>
+        <div style="font-size: 48px; margin-bottom: 12px;">📄</div>
+        <div style="color: var(--text); margin-bottom: 8px;">Drop CSV file here or click to browse</div>
+        <div style="color: var(--text-dim); font-size: 11px;">FNB Easy Account format supported</div>
+        <input type="file" id="fileInput" accept=".csv" onchange="handleFileSelect(event)">
+        <div>
+          <select id="currencySelect" style="margin-top: 12px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; font-family: 'DM Mono', monospace; font-size: 11px;">
+            <option value="ZAR">ZAR (FNB)</option>
+            <option value="GBP">GBP (Monzo)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="uploadStatus"></div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="summary-grid" id="summaryGrid">
+    <div class="summary-card">
+      <div class="label">avg monthly spend (GBP)</div>
+      <div class="val" id="sumGbpAvg">—</div>
+      <div class="note">Loading...</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">avg monthly spend (ZAR)</div>
+      <div class="val" id="sumZarAvg">—</div>
+      <div class="note">Loading...</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">current budget</div>
+      <div class="val green" id="sumBudgetGbp">—</div>
+      <div class="note" id="sumNoteGbp">Set budgets below ↓</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">biggest opportunity</div>
+      <div class="val yellow" id="biggestOpp">—</div>
+      <div class="note" id="biggestOppNote">—</div>
+    </div>
+  </div>
+
+  <!-- GBP Section -->
+  <div id="gbpSection">
+    <div class="section-title">Monzo spending &mdash; GBP</div>
+    <table class="budget-table" id="gbpTable">
+      <thead>
+        <tr>
+          <td class="cat" style="color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Category</td>
+          <td class="avg" style="color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Monthly avg</td>
+          <td style="text-align:right;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Budget</td>
+        </tr>
+      </thead>
+      <tbody id="gbpBody"></tbody>
+      <tfoot>
+        <tr class="total-row" id="gbpTotalRow">
+          <td class="cat" style="font-weight:500">Total</td>
+          <td class="avg" id="gbpTotalAvg">—</td>
+          <td class="budget-val" id="gbpTotalBudget">—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ZAR Section -->
+  <div id="zarSection" style="margin-top:40px">
+    <div class="section-title">FNB Easy Account &mdash; ZAR</div>
+    <table class="budget-table" id="zarTable">
+      <thead>
+        <tr>
+          <td class="cat" style="color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Category</td>
+          <td class="avg" style="color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Monthly avg</td>
+          <td style="text-align:right;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Budget</td>
+        </tr>
+      </thead>
+      <tbody id="zarBody"></tbody>
+      <tfoot>
+        <tr class="total-row" id="zarTotalRow">
+          <td class="cat" style="font-weight:500">Total</td>
+          <td class="avg" id="zarTotalAvg">—</td>
+          <td class="budget-val" id="zarTotalBudget">—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Savings tracker -->
+  <div class="savings-tracker" id="savingsBox">
+    <div class="label">projected monthly surplus / deficit</div>
+    <div class="savings-big" id="savingsAmt">—</div>
+    <div class="savings-bar-outer"><div class="savings-bar-inner" id="savingsBar" style="width:0%"></div></div>
+    <div class="savings-nums">
+      <span>R0</span>
+      <span id="savingsNote">Set your budgets above to see your surplus</span>
+      <span>Target</span>
+    </div>
+  </div>
+
+  <footer>AI-powered budget tracker · Upload CSV files to get started</footer>
+
+</div>
+
+<!-- Category Review Modal -->
+<div class="modal" id="categoryModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Review Category Suggestions</h2>
+      <button class="close-btn" onclick="closeCategoryModal()">×</button>
+    </div>
+    <div id="categorySuggestions"></div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="js/csv-parser.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/budget-manager.js"></script>
+<script>
+// Configuration - Supabase credentials
+const SUPABASE_URL = 'https://vydlgnxwqvkrrlkdhzfh.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5ZGxnbnh3cXZrcnJsa2RoemZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MDk5ODYsImV4cCI6MjA4ODI4NTk4Nn0.C9B6t3ddpJhucgn_FIiDNOnmNmldfIb1KIv3CvQJCLw'
+
+let supabase = null
+let budgetManager = null
+let gbpData = []
+let zarData = []
+let gbpBudgets = []
+let zarBudgets = []
+
+// Initialize
+async function init() {
+  try {
+    // Initialize Supabase
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    
+    // Initialize Budget Manager
+    budgetManager = new BudgetManager(supabase)
+    
+    // Load data
+    await loadBudgetData()
+    
+    // Setup drag and drop
+    setupDragAndDrop()
+  } catch (error) {
+    console.error('Initialization error:', error)
+    showStatus('error', 'Failed to initialize. Check your Supabase configuration.')
+  }
+}
+
+// Load budget data from Supabase
+async function loadBudgetData() {
+  try {
+    const data = await budgetManager.loadData()
+    gbpData = data.gbp || []
+    zarData = data.zar || []
+    
+    gbpBudgets = gbpData.map(r => r.budget || 0)
+    zarBudgets = zarData.map(r => r.budget || 0)
+    
+    buildGBP()
+    buildZAR()
+    refreshTotals()
+    updateSummary()
+  } catch (error) {
+    console.error('Error loading budget data:', error)
+    showStatus('error', 'Failed to load budget data')
+  }
+}
+
+// Build GBP table
+function buildGBP() {
+  const tbody = document.getElementById('gbpBody')
+  tbody.innerHTML = ''
+  
+  if (gbpData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:24px;">No GBP data yet. Upload a CSV file to get started.</td></tr>'
+    return
+  }
+  
+  gbpData.forEach((row, i) => {
+    const tr = document.createElement('tr')
+    const pct = row.avg > 0 ? Math.min(100, Math.round((gbpBudgets[i] / row.avg) * 100)) : 0
+    const cc = colorClass(gbpBudgets[i], row.avg)
+    tr.innerHTML = `
+      <td class="cat">${row.cat}${row.fixed ? '<span class="tag ok">fixed</span>' : ''}</td>
+      <td class="avg">£${Math.round(row.avg).toLocaleString()}<span class="bar-wrap"><span class="bar-fill" style="width:${pct}%"></span></span></td>
+      <td><div class="input-cell"><span class="currency-sym">£</span>
+        <input class="budget-input ${cc}" type="number" value="${gbpBudgets[i]}" data-id="${row.id}" data-currency="GBP" oninput="onBudgetChange('${row.id}', this, 'GBP')">
+      </div></td>`
+    tbody.appendChild(tr)
+  })
+}
+
+// Build ZAR table
+function buildZAR() {
+  const tbody = document.getElementById('zarBody')
+  tbody.innerHTML = ''
+  
+  if (zarData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:24px;">No ZAR data yet. Upload a CSV file to get started.</td></tr>'
+    return
+  }
+  
+  zarData.forEach((row, i) => {
+    const tr = document.createElement('tr')
+    const pct = row.avg > 0 ? Math.min(100, Math.round((zarBudgets[i] / row.avg) * 100)) : 0
+    const cc = colorClass(zarBudgets[i], row.avg)
+    tr.innerHTML = `
+      <td class="cat">${row.cat}${row.fixed ? '<span class="tag ok">fixed</span>' : ''}</td>
+      <td class="avg">R${Math.round(row.avg).toLocaleString()}<span class="bar-wrap"><span class="bar-fill" style="width:${pct}%"></span></span></td>
+      <td><div class="input-cell"><span class="currency-sym">R</span>
+        <input class="budget-input ${cc}" type="number" value="${zarBudgets[i]}" data-id="${row.id}" data-currency="ZAR" oninput="onBudgetChange('${row.id}', this, 'ZAR')">
+      </div></td>`
+    tbody.appendChild(tr)
+  })
+}
+
+// Handle budget change
+async function onBudgetChange(categoryId, input, currency) {
+  const val = parseFloat(input.value) || 0
+  const currentMonth = new Date().toISOString().slice(0, 7) + '-01'
+  
+  try {
+    await budgetManager.updateBudget(categoryId, currentMonth, val)
+    
+    // Update local arrays
+    if (currency === 'GBP') {
+      const index = gbpData.findIndex(r => r.id === categoryId)
+      if (index !== -1) {
+        gbpBudgets[index] = val
+        gbpData[index].budget = val
+      }
+    } else {
+      const index = zarData.findIndex(r => r.id === categoryId)
+      if (index !== -1) {
+        zarBudgets[index] = val
+        zarData[index].budget = val
+      }
+    }
+    
+    // Update color class
+    const row = currency === 'GBP' ? gbpData.find(r => r.id === categoryId) : zarData.find(r => r.id === categoryId)
+    input.className = 'budget-input ' + colorClass(val, row.avg)
+    
+    refreshTotals()
+  } catch (error) {
+    console.error('Error updating budget:', error)
+    showStatus('error', 'Failed to update budget')
+  }
+}
+
+function colorClass(val, avg) {
+  if (avg === 0) return ''
+  if (val <= avg * 0.85) return 'ok'
+  if (val > avg) return 'over'
+  if (val > avg * 0.95) return 'warn'
+  return ''
+}
+
+function refreshTotals() {
+  const gbpTotal = gbpBudgets.reduce((a,b) => a+b, 0)
+  const zarTotal = zarBudgets.reduce((a,b) => a+b, 0)
+  const gbpAvg = gbpData.reduce((a,r) => a+r.avg, 0)
+  const zarAvg = zarData.reduce((a,r) => a+r.avg, 0)
+
+  const gbpCC = colorClass(gbpTotal, gbpAvg)
+  document.getElementById('gbpTotalBudget').textContent = '£' + Math.round(gbpTotal).toLocaleString()
+  document.getElementById('gbpTotalBudget').className = 'budget-val ' + gbpCC
+  document.getElementById('gbpTotalAvg').textContent = '£' + Math.round(gbpAvg).toLocaleString()
+
+  const zarCC = colorClass(zarTotal, zarAvg)
+  document.getElementById('zarTotalBudget').textContent = 'R' + Math.round(zarTotal).toLocaleString()
+  document.getElementById('zarTotalBudget').className = 'budget-val ' + zarCC
+  document.getElementById('zarTotalAvg').textContent = 'R' + Math.round(zarAvg).toLocaleString()
+
+  document.getElementById('sumBudgetGbp').textContent = '£' + Math.round(gbpTotal).toLocaleString()
+
+  // Savings calculation
+  const gbpSaved = gbpAvg - gbpTotal
+  const zarSaved = zarAvg - zarTotal
+  const totalSavedZAR = zarSaved + (gbpSaved * 24)
+  const el = document.getElementById('savingsAmt')
+  const bar = document.getElementById('savingsBar')
+  const note = document.getElementById('savingsNote')
+  
+  if (totalSavedZAR > 0) {
+    el.textContent = 'R' + Math.round(totalSavedZAR).toLocaleString() + ' surplus'
+    el.style.color = 'var(--accent)'
+    const pct = Math.min(100, (totalSavedZAR / 5000) * 100)
+    bar.style.width = pct + '%'
+    bar.style.background = 'var(--accent)'
+    note.textContent = '(GBP at ≈R24 / £1)'
+  } else {
+    el.textContent = 'R' + Math.abs(Math.round(totalSavedZAR)).toLocaleString() + ' over avg'
+    el.style.color = 'var(--red)'
+    bar.style.width = '0%'
+    note.textContent = 'Budget exceeds your average — try reducing variable categories'
+  }
+}
+
+function updateSummary() {
+  const summary = budgetManager.getSummary()
+  
+  document.getElementById('sumGbpAvg').textContent = '£' + Math.round(summary.gbpAvg).toLocaleString()
+  document.getElementById('sumZarAvg').textContent = 'R' + Math.round(summary.zarAvg).toLocaleString()
+  
+  if (summary.biggestOpportunity) {
+    const opp = summary.biggestOpportunity
+    document.getElementById('biggestOpp').textContent = opp.name
+    document.getElementById('biggestOppNote').textContent = `${opp.currency === 'GBP' ? '£' : 'R'}${Math.round(opp.avg).toLocaleString()}/mo avg`
+  }
+}
+
+function setCurrency(mode) {
+  document.querySelectorAll('.currency-btn').forEach(b => b.classList.remove('active'))
+  event.target.classList.add('active')
+  document.getElementById('gbpSection').style.display = (mode === 'zar') ? 'none' : 'block'
+  document.getElementById('zarSection').style.display = (mode === 'gbp') ? 'none' : 'block'
+}
+
+// CSV Upload Handling
+function setupDragAndDrop() {
+  const uploadArea = document.getElementById('uploadArea')
+  
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    uploadArea.classList.add('dragover')
+  })
+  
+  uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover')
+  })
+  
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault()
+    uploadArea.classList.remove('dragover')
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      handleFile(files[0])
+    }
+  })
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files[0]
+  if (file) {
+    handleFile(file)
+  }
+}
+
+async function handleFile(file) {
+  if (!file.name.endsWith('.csv')) {
+    showStatus('error', 'Please upload a CSV file')
+    return
+  }
+  
+  showStatus('info', 'Reading CSV file...')
+  
+  try {
+    const text = await file.text()
+    const currency = document.getElementById('currencySelect').value
+    const parser = new CSVParser()
+    const transactions = parser.parse(text, currency)
+    
+    if (transactions.length === 0) {
+      showStatus('error', 'No transactions found in CSV file')
+      return
+    }
+    
+    showStatus('info', `Found ${transactions.length} transactions. Categorizing with AI...`)
+    
+    // Call Edge Function for categorization
+    const { data, error } = await supabase.functions.invoke('categorize-transactions', {
+      body: { transactions, currency }
+    })
+    
+    if (error) throw error
+    
+    // Store transactions in Supabase
+    const transactionsToInsert = data.results.map(result => ({
+      date: result.transaction.date,
+      description: result.transaction.description,
+      amount: result.transaction.amount,
+      currency: result.transaction.currency,
+      category_id: result.category_id,
+      category_suggested: result.category_suggested,
+      is_manual_review: !result.category_id && !!result.category_suggested,
+      csv_source: file.name
+    }))
+    
+    const { error: insertError } = await supabase
+      .from('transactions')
+      .insert(transactionsToInsert)
+    
+    if (insertError) throw insertError
+    
+    // Check for suggestions
+    const suggestions = data.results.filter(r => r.category_suggested && !r.category_id)
+    if (suggestions.length > 0) {
+      showCategoryModal(suggestions)
+    }
+    
+    showStatus('success', `Successfully imported ${transactions.length} transactions`)
+    
+    // Reload budget data
+    await loadBudgetData()
+  } catch (error) {
+    console.error('Error processing CSV:', error)
+    showStatus('error', `Error: ${error.message}`)
+  }
+}
+
+function showStatus(type, message) {
+  const statusDiv = document.getElementById('uploadStatus')
+  statusDiv.innerHTML = `<div class="status-message ${type}">${message}</div>`
+  setTimeout(() => {
+    statusDiv.innerHTML = ''
+  }, 5000)
+}
+
+function showCategoryModal(suggestions) {
+  const modal = document.getElementById('categoryModal')
+  const container = document.getElementById('categorySuggestions')
+  
+  container.innerHTML = ''
+  
+  suggestions.forEach((suggestion, idx) => {
+    const item = document.createElement('div')
+    item.className = 'suggestion-item'
+    item.innerHTML = `
+      <div class="suggestion-info">
+        <div class="suggestion-desc">${suggestion.transaction.description}</div>
+        <div class="suggestion-meta">${suggestion.transaction.currency} ${suggestion.transaction.amount.toFixed(2)} · Suggested: ${suggestion.category_suggested}</div>
+      </div>
+      <div class="suggestion-actions">
+        <select class="category-select" id="catSelect_${idx}">
+          <option value="">Select category...</option>
+        </select>
+        <button class="btn-small" onclick="createCategory('${suggestion.category_suggested}', '${suggestion.transaction.currency}')">Create</button>
+      </div>
+    `
+    container.appendChild(item)
+  })
+  
+  modal.classList.add('active')
+}
+
+function closeCategoryModal() {
+  document.getElementById('categoryModal').classList.remove('active')
+}
+
+async function createCategory(name, currency) {
+  try {
+    const { error } = await supabase
+      .from('categories')
+      .insert({ name, currency, is_predefined: false })
+    
+    if (error) throw error
+    
+    showStatus('success', `Created category: ${name}`)
+    await loadBudgetData()
+  } catch (error) {
+    console.error('Error creating category:', error)
+    showStatus('error', 'Failed to create category')
+  }
+}
+
+// Initialize on load
+init()
+</script>
+</body>
+</html>
