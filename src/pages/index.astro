@@ -22,6 +22,8 @@ import { supabase } from '../lib/supabase';
     
     <!-- Navigation -->
     <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+      <a href="/month" class="currency-btn" style="text-decoration: none; display: inline-block;">Monthly Tracker</a>
+      <a href="/transactions" class="currency-btn" style="text-decoration: none; display: inline-block;">Transactions</a>
       <a href="/settings" class="currency-btn" style="text-decoration: none; display: inline-block;">Settings</a>
       <div style="display: flex; align-items: center; gap: 0; margin-left: 12px;">
         <button onclick="changeFY(-1)" style="background: var(--surface2); border: 1px solid var(--border); border-right: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 4px 0 0 4px; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">‹</button>
@@ -87,17 +89,37 @@ import { supabase } from '../lib/supabase';
     </div>
   </div>
 
-  <!-- Monthly Breakdown -->
-  <div id="monthlyBreakdown">
-    <div class="section-title">Monthly Breakdown</div>
-    <div id="monthsContainer"></div>
+  <!-- Category Breakdown -->
+  <div id="categoryBreakdown">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+      <div class="section-title" style="margin-bottom: 0;">Annual Category Breakdown</div>
+      <div class="chart-global-toggle" style="display: flex; gap: 4px; align-items: center;">
+        <span style="color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.04em; margin-right: 4px;">VIEW ALL AS</span>
+        <button class="chart-mode-btn active" onclick="window.switchAllChartMode('actual', this)">Actual</button>
+        <button class="chart-mode-btn" onclick="window.switchAllChartMode('burn', this)">Burn Rate</button>
+      </div>
+    </div>
+    <div id="categoriesContainer"></div>
   </div>
 
   <footer>Budget Tracker · FY Overview</footer>
 
 </div>
 
+<div id="catModal" style="display:none; position:fixed; inset:0; z-index:9997; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);" onclick="closeCatModal(event)">
+  <div id="catModalInner" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:32px; min-width:480px; max-width:640px; width:90%;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:24px;">
+      <h2 id="catModalName" style="font-family:'Fraunces',serif; font-size:24px; font-weight:300; font-style:italic; color:var(--text);"></h2>
+      <button onclick="closeCatModal()" style="background:transparent; border:none; color:var(--text-dim); font-family:'DM Mono',monospace; font-size:18px; cursor:pointer; padding:0 4px;">×</button>
+    </div>
+    <table id="catModalTable" style="width:100%; border-collapse:collapse;"></table>
+    <div id="catModalTotals" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;"></div>
+  </div>
+</div>
+
 <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">☀ Light</button>
+
+<div id="chartTooltip" style="position: fixed; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 4px; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 9998;"></div>
 
 <script>
   import { supabase } from '../lib/supabase';
@@ -160,6 +182,13 @@ import { supabase } from '../lib/supabase';
     order: number; // Financial year order: April=0, May=1, ..., March=11
   }
 
+  interface CategoryData {
+    id: string;
+    name: string;
+    annualBudget: number;
+    annualActual: number;
+  }
+
   // Window interface extension
   declare global {
     interface Window {
@@ -168,6 +197,10 @@ import { supabase } from '../lib/supabase';
       changeFY: (direction: number) => void;
       handleSignOut: () => Promise<void>;
       toggleTheme: () => void;
+      openCatModal: (categoryId: string) => void;
+      closeCatModal: (event?: MouseEvent) => void;
+      switchChartMode: (button: HTMLButtonElement, catId: string, mode: 'actual' | 'burn') => void;
+      switchAllChartMode: (mode: 'actual' | 'burn', btn: HTMLButtonElement) => void;
     }
   }
 
@@ -176,6 +209,8 @@ import { supabase } from '../lib/supabase';
   const now = new Date();
   let currentYear = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
   let monthlyData: MonthlyData[] = [];
+  let categoryData: CategoryData[] = [];
+  let categoryMonthlyActuals: Record<string, Record<string, number>> = {};
   let exchangeRate = 0;
   let yearIncome = 0;
   let yearBudget = 0;
@@ -208,7 +243,7 @@ import { supabase } from '../lib/supabase';
         .eq('user_id', user.id);
 
       const settingsMap = Object.fromEntries((settingsRows || []).map(s => [s.key, s.value]));
-      userCurrency = (settingsRows?.[0]?.preferred_currency as CurrencyCode) || 'ZAR';
+      userCurrency = (settingsMap['preferred_currency'] as CurrencyCode) || 'ZAR';
       showCurrencyConversion = settingsMap['show_currency_conversion'] === 'true';
       conversionCurrency = (settingsMap['conversion_currency'] as CurrencyCode) || 'GBP';
 
@@ -292,32 +327,19 @@ import { supabase } from '../lib/supabase';
       `;
     }
 
-    // Monthly breakdown skeleton — 12 month card placeholders
-    const monthsContainer = document.getElementById('monthsContainer');
-    if (monthsContainer) {
-      monthsContainer.innerHTML = Array(12).fill(`
-        <div class="month-card" style="pointer-events: none;">
-          <div class="month-header">
-            <div class="skeleton skeleton-block" style="width: 50%; height: 18px;"></div>
-          </div>
-          <div class="month-stats">
-            <div>
-              <div class="skeleton skeleton-block" style="width: 40%;"></div>
-              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
-            </div>
-            <div>
-              <div class="skeleton skeleton-block" style="width: 40%;"></div>
-              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
-            </div>
-            <div>
-              <div class="skeleton skeleton-block" style="width: 40%;"></div>
-              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
-            </div>
-            <div>
-              <div class="skeleton skeleton-block" style="width: 40%;"></div>
-              <div class="skeleton skeleton-block" style="width: 60%; height: 18px;"></div>
-            </div>
-          </div>
+    // Category breakdown skeleton — 12 category card placeholders
+    const categoriesContainer = document.getElementById('categoriesContainer');
+    if (categoriesContainer) {
+      categoriesContainer.innerHTML = Array(12).fill(`
+        <div class="cat-card" style="pointer-events: none;">
+          <div class="skeleton skeleton-block" style="width: 55%; height: 16px; margin-bottom: 16px;"></div>
+          <div class="skeleton skeleton-block" style="width: 40%; margin-bottom: 6px;"></div>
+          <div class="skeleton skeleton-block" style="width: 65%; height: 14px; margin-bottom: 12px;"></div>
+          <div class="skeleton skeleton-block" style="width: 40%; margin-bottom: 6px;"></div>
+          <div class="skeleton skeleton-block" style="width: 65%; height: 14px; margin-bottom: 12px;"></div>
+          <div class="skeleton skeleton-block" style="width: 40%; margin-bottom: 6px;"></div>
+          <div class="skeleton skeleton-block" style="width: 65%; height: 14px; margin-bottom: 14px;"></div>
+          <div class="skeleton skeleton-block" style="width: 100%; height: 4px; border-radius: 2px;"></div>
         </div>
       `).join('');
     }
@@ -396,10 +418,19 @@ import { supabase } from '../lib/supabase';
         if (incomeMap[month] === undefined) incomeMap[month] = 0;
       }
 
+      // Load all categories with their monthly_amount defaults
+      const { data: allCategories } = await supabase
+        .from('categories')
+        .select('id, name, monthly_amount');
+      const catMonthlyMap: Record<string, { name: string; monthlyAmount: number }> = {};
+      (allCategories || []).forEach(c => {
+        catMonthlyMap[c.id] = { name: c.name, monthlyAmount: parseFloat(c.monthly_amount || 0) };
+      });
+
       // Load budgets for all months (RLS should filter by user_id, but we'll be explicit)
       const { data: budgets, error: budgetError } = await supabase
         .from('budgets')
-        .select('month, budget_amount, actual_amount')
+        .select('month, category_id, budget_amount, actual_amount')
         .in('month', months);
 
       if (budgetError) {
@@ -408,13 +439,39 @@ import { supabase } from '../lib/supabase';
 
       const budgetMap: Record<string, number> = {};
       const actualMap: Record<string, number> = {};
+      const catMap: Record<string, CategoryData> = {};
+      categoryMonthlyActuals = {};
       (budgets || []).forEach(b => {
         const month = b.month;
-        let budgetAmount = parseFloat(b.budget_amount || 0);
+        const budgetAmount = parseFloat(b.budget_amount || 0);
         const actualAmount = parseFloat(b.actual_amount || 0);
         budgetMap[month] = (budgetMap[month] || 0) + budgetAmount;
         actualMap[month] = (actualMap[month] || 0) + actualAmount;
+
+        // Accumulate per-category actual totals
+        const catId = b.category_id;
+        if (catId) {
+          if (!catMap[catId]) {
+            const catInfo = catMonthlyMap[catId] || { name: 'Unknown', monthlyAmount: 0 };
+            // annualBudget = monthly_amount * 12 (category default, not summed row budgets)
+            catMap[catId] = { id: catId, name: catInfo.name, annualBudget: catInfo.monthlyAmount * 12, annualActual: 0 };
+          }
+          catMap[catId].annualActual += actualAmount;
+
+          // Accumulate per-category per-month actuals for sparklines
+          if (!categoryMonthlyActuals[catId]) categoryMonthlyActuals[catId] = {};
+          categoryMonthlyActuals[catId][month] = (categoryMonthlyActuals[catId][month] || 0) + actualAmount;
+        }
       });
+
+      // Also include categories that have a monthly_amount but no budget rows yet this FY
+      Object.entries(catMonthlyMap).forEach(([catId, catInfo]) => {
+        if (!catMap[catId] && catInfo.monthlyAmount > 0) {
+          catMap[catId] = { id: catId, name: catInfo.name, annualBudget: catInfo.monthlyAmount * 12, annualActual: 0 };
+        }
+      });
+
+      categoryData = Object.values(catMap).sort((a, b) => a.name.localeCompare(b.name));
 
       // Build monthly data with explicit order (April=0, May=1, ..., March=11)
       // Reset monthlyData to ensure we only have current financial year months
@@ -462,15 +519,12 @@ import { supabase } from '../lib/supabase';
         yearNetEl.className = 'val ' + (yearNet >= 0 ? 'green' : 'red');
       }
       if (yearNetNoteEl) {
-        const netFormatted = formatCurrency(Math.round(Math.abs(yearNet)), userCurrency);
-        yearNetNoteEl.textContent = yearNet >= 0 
-          ? `Surplus: ${netFormatted}` 
-          : `Deficit: ${netFormatted}`;
+        yearNetNoteEl.textContent = yearNet >= 0 ? 'Surplus' : 'Deficit';
         yearNetNoteEl.style.color = yearNet >= 0 ? 'var(--accent)' : 'var(--red)';
       }
 
-      // Build monthly breakdown
-      buildMonthlyBreakdown();
+      // Build category breakdown
+      buildCategoryBreakdown();
       
       // Update conversions
       updateYearConversions();
@@ -480,54 +534,190 @@ import { supabase } from '../lib/supabase';
     }
   }
 
-  function buildMonthlyBreakdown() {
-    const container = document.getElementById('monthsContainer');
+  // ── Chart rendering helpers ─────────────────────────────────────────────────
+
+  function buildChartSVGContent(catId: string, mode: 'actual' | 'burn'): string {
+    const W = 300, H = 80, padTop = 8, padBottom = 4;
+    const plotH = H - padTop - padBottom;
+    const colW = (W / 18).toFixed(2);
+    const fyMonthKeys = monthlyData.map(m => m.month);
+    const fyMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+    const cat = categoryData.find(c => c.id === catId);
+    if (!cat) return '';
+    const monthlyBudget = cat.annualBudget / 12;
+    const monthActuals = categoryMonthlyActuals[cat.id] || {};
+    const actuals = fyMonthKeys.map(mk => monthActuals[mk] || 0);
+    // Find last month index where monthly actual > 0
+    const lastDataIdx = actuals.reduce((last, v, i) => v > 0 ? i : last, -1);
+
+    if (mode === 'actual') {
+      const maxVal = Math.max(...actuals, monthlyBudget, 1);
+      const toY = (v: number) => padTop + (1 - v / maxVal) * plotH;
+      const refY = toY(monthlyBudget).toFixed(2);
+      const refLine = monthlyBudget > 0 ? `<line x1="0" y1="${refY}" x2="${W}" y2="${refY}" class="sparkline-ref" />` : '';
+      // If no data yet, render only the reference line
+      if (lastDataIdx === -1) return refLine;
+      const slicedActuals = actuals.slice(0, lastDataIdx + 1);
+      const polyPoints = slicedActuals.map((v, i) => `${((i / 11) * W).toFixed(2)},${toY(v).toFixed(2)}`).join(' ');
+      return [
+        refLine,
+        `<polyline points="${polyPoints}" class="sparkline-line" />`,
+        slicedActuals.map((v, i) => `<circle cx="${((i / 11) * W).toFixed(2)}" cy="${toY(v).toFixed(2)}" r="2.5" class="sparkline-dot" />`).join(''),
+        // Hit rects span all 12 months; only months with data get the sparkline-hit class (tooltip)
+        actuals.map((v, i) => {
+          const rx = ((i / 11) * W - W / 36).toFixed(2);
+          const hitClass = i <= lastDataIdx ? 'sparkline-hit' : '';
+          return `<rect x="${rx}" y="0" width="${colW}" height="${H}" fill="transparent" stroke="none" class="${hitClass}" data-month="${fyMonthLabels[i]}" data-amount="${v}" />`;
+        }).join(''),
+      ].join('');
+    }
+
+    // Burn Rate mode — cumulative actuals vs straight-line expected
+    const cumActuals: number[] = [];
+    let cum = 0;
+    for (const v of actuals) { cum += v; cumActuals.push(cum); }
+    const annualBudget = monthlyBudget * 12;
+    const maxVal = Math.max(...cumActuals, annualBudget, 1);
+    const toY = (v: number) => padTop + (1 - v / maxVal) * plotH;
+    // Colour: red if cumulative actual at last active month exceeds expected spend at that month
+    let colour: string;
+    if (lastDataIdx === -1) colour = 'var(--accent)'; // no data yet
+    else {
+      const cumAtLast = cumActuals[lastDataIdx];
+      const expectedAtLast = monthlyBudget * (lastDataIdx + 1);
+      const isOver = annualBudget > 0 && cumAtLast > expectedAtLast;
+      colour = isOver ? 'var(--red)' : 'var(--accent)';
+    }
+    // Reference line: straight diagonal from (x=0, y=0) to (x=W, y=annualBudget) — always full width
+    const refY1 = toY(0).toFixed(2);
+    const refY2 = toY(annualBudget).toFixed(2);
+    const refLine = annualBudget > 0 ? `<line x1="0" y1="${refY1}" x2="${W}" y2="${refY2}" class="sparkline-ref" />` : '';
+    // If no data yet, render only the reference line
+    if (lastDataIdx === -1) return refLine;
+    const slicedCumActuals = cumActuals.slice(0, lastDataIdx + 1);
+    const polyPoints = slicedCumActuals.map((v, i) => `${((i / 11) * W).toFixed(2)},${toY(v).toFixed(2)}`).join(' ');
+    return [
+      refLine,
+      `<polyline points="${polyPoints}" class="sparkline-line" style="stroke:${colour};" />`,
+      slicedCumActuals.map((v, i) => `<circle cx="${((i / 11) * W).toFixed(2)}" cy="${toY(v).toFixed(2)}" r="2.5" class="sparkline-dot" style="fill:${colour};" />`).join(''),
+      // Hit rects span all 12 months; only months with data get the sparkline-hit class (tooltip)
+      actuals.map((_v, i) => {
+        const rx = ((i / 11) * W - W / 36).toFixed(2);
+        const hitClass = i <= lastDataIdx ? 'sparkline-hit' : '';
+        return `<rect x="${rx}" y="0" width="${colW}" height="${H}" fill="transparent" stroke="none" class="${hitClass}" data-month="${fyMonthLabels[i]}" data-amount="${actuals[i]}" />`;
+      }).join(''),
+    ].join('');
+  }
+
+  function attachChartTooltips(card: HTMLElement): void {
+    const tooltip = document.getElementById('chartTooltip');
+    if (!tooltip) return;
+    card.querySelectorAll<SVGRectElement>('rect.sparkline-hit').forEach(rect => {
+      rect.addEventListener('mouseover', (e: MouseEvent) => {
+        const month = rect.dataset.month || '';
+        const amount = parseFloat(rect.dataset.amount || '0');
+        tooltip.textContent = `${month}  ${formatCurrency(Math.round(amount), userCurrency)}`;
+        tooltip.style.opacity = '1';
+        tooltip.style.left = `${e.clientX + 12}px`;
+        tooltip.style.top = `${e.clientY - 28}px`;
+      });
+      rect.addEventListener('mousemove', (e: MouseEvent) => {
+        tooltip.style.left = `${e.clientX + 12}px`;
+        tooltip.style.top = `${e.clientY - 28}px`;
+      });
+      rect.addEventListener('mouseout', () => { tooltip.style.opacity = '0'; });
+    });
+  }
+
+  function switchChartMode(button: HTMLButtonElement, catId: string, mode: 'actual' | 'burn'): void {
+    const card = button.closest('.cat-card') as HTMLElement | null;
+    if (!card) return;
+    card.dataset.chartMode = mode;
+    card.querySelectorAll<HTMLButtonElement>('.chart-mode-btn').forEach(b => b.classList.remove('active'));
+    button.classList.add('active');
+    const svgEl = card.querySelector('.sparkline-svg');
+    if (svgEl) {
+      svgEl.innerHTML = buildChartSVGContent(catId, mode);
+      attachChartTooltips(card);
+    }
+  }
+
+  function switchAllChartMode(mode: 'actual' | 'burn', btn: HTMLButtonElement): void {
+    // Update the global toggle button states
+    const globalRow = btn.closest('.chart-global-toggle');
+    if (globalRow) {
+      globalRow.querySelectorAll<HTMLButtonElement>('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    // Switch every card to the chosen mode
+    document.querySelectorAll<HTMLElement>('.cat-card').forEach(card => {
+      const catId = card.dataset.catId || '';
+      const modeBtn = Array.from(card.querySelectorAll<HTMLButtonElement>('.chart-mode-btn'))
+        .find(b => mode === 'actual' ? b.textContent === 'Actual' : b.textContent === 'Burn Rate');
+      if (modeBtn) switchChartMode(modeBtn, catId, mode);
+    });
+  }
+
+  function buildCategoryBreakdown() {
+    const container = document.getElementById('categoriesContainer');
     if (!container) return;
 
     container.innerHTML = '';
 
-    // Sort by order to ensure April is first and March is last
-    const sortedMonthlyData = [...monthlyData].sort((a, b) => a.order - b.order);
+    // Financial year month labels in order: Apr … Mar
+    const fyMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
-    sortedMonthlyData.forEach(monthData => {
-      const monthCard = document.createElement('div');
-      monthCard.className = 'month-card';
-      monthCard.style.cursor = 'pointer';
-      monthCard.onclick = () => {
-        const monthStr = monthData.month.slice(0, 7);
-        window.location.href = `/month?month=${monthStr}`;
-      };
+    categoryData.forEach(cat => {
+      const remaining = cat.annualBudget - cat.annualActual;
+      const remainingClass = remaining < 0 ? 'red' : 'green';
+      const progressPct = cat.annualBudget > 0
+        ? Math.min((cat.annualActual / cat.annualBudget) * 100, 100)
+        : 0;
+      const overBudget = cat.annualActual > cat.annualBudget;
 
-      const variance = monthData.actual - monthData.budget;
-      const varianceClass = variance > 0 ? 'over' : 'ok';
+      const labelSpans = fyMonthLabels.map(lbl => `<span>${lbl}</span>`).join('');
 
-      monthCard.innerHTML = `
-        <div class="month-header">
-          <h3>${monthData.monthName}</h3>
-          <span class="month-link">View →</span>
+      const card = document.createElement('div');
+      card.className = 'cat-card';
+      card.dataset.catId = cat.id;
+      card.dataset.chartMode = 'actual';
+
+      card.innerHTML = `
+        <div class="cat-header">
+          <div class="cat-name">${cat.name}</div>
+          <button class="cat-detail-btn" onclick="openCatModal('${cat.id}')">See detail</button>
         </div>
-        <div class="month-stats">
-          <div class="month-stat">
-            <span class="label">Income</span>
-            <div class="stat-val ${monthData.income > 0 ? 'green' : ''}">${formatCurrency(Math.round(monthData.income), userCurrency)}</div>
-          </div>
-          <div class="month-stat">
-            <span class="label">Budget</span>
-            <div class="stat-val">${formatCurrency(Math.round(monthData.budget), userCurrency)}</div>
-          </div>
-          <div class="month-stat">
-            <span class="label">Actual</span>
-            <div class="stat-val">${formatCurrency(Math.round(monthData.actual), userCurrency)}</div>
-          </div>
-          <div class="month-stat">
-            <span class="label">Variance</span>
-            <div class="stat-val ${varianceClass}">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</div>
-          </div>
+        <div class="cat-row">
+          <span class="label">Annual Budget</span>
+          <span class="cat-val">${formatCurrency(Math.round(cat.annualBudget), userCurrency)}</span>
         </div>
+        <div class="cat-row">
+          <span class="label">Spent</span>
+          <span class="cat-val">${formatCurrency(Math.round(cat.annualActual), userCurrency)}</span>
+        </div>
+        <div class="cat-row">
+          <span class="label">Remaining</span>
+          <span class="cat-val ${remainingClass}">${formatCurrency(Math.round(Math.abs(remaining)), userCurrency)}${remaining < 0 ? ' over' : ''}</span>
+        </div>
+        <div class="cat-progress-track">
+          <div class="cat-progress-bar ${overBudget ? 'over' : ''}" style="width: ${progressPct}%;"></div>
+        </div>
+        <div class="chart-toggle-row">
+          <button class="chart-mode-btn active" onclick="event.stopPropagation(); window.switchChartMode(this, '${cat.id}', 'actual')">Actual</button>
+          <button class="chart-mode-btn" onclick="event.stopPropagation(); window.switchChartMode(this, '${cat.id}', 'burn')">Burn Rate</button>
+        </div>
+        <div style="border-top: 1px solid var(--border); margin: 8px 0 16px;"></div>
+        <svg viewBox="0 0 300 80" class="sparkline-svg">${buildChartSVGContent(cat.id, 'actual')}</svg>
+        <div class="chart-month-labels">${labelSpans}</div>
       `;
 
-      container.appendChild(monthCard);
+      container.appendChild(card);
+      attachChartTooltips(card);
     });
+
+    if (categoryData.length === 0) {
+      container.innerHTML = `<div style="padding: 32px; color: var(--text-dim); font-size: 13px; grid-column: 1 / -1;">No category data for this financial year.</div>`;
+    }
   }
 
   async function updateExchangeRate() {
@@ -608,12 +798,105 @@ import { supabase } from '../lib/supabase';
     }
   }
 
+  // Financial year month labels in order: Apr → Mar
+  const FY_MONTH_LABELS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+  const FY_MONTH_NAMES  = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
+
+  function openCatModal(categoryId: string) {
+    const cat = categoryData.find(c => c.id === categoryId);
+    if (!cat) return;
+
+    const monthlyAmount = cat.annualBudget / 12;
+    const actuals = categoryMonthlyActuals[categoryId] || {};
+
+    // monthlyData is already ordered Apr→Mar
+    const fyMonthKeys = monthlyData.map(m => m.month);
+
+    // Build table rows
+    const rowsHtml = fyMonthKeys.map((mk, i) => {
+      const actual = actuals[mk] || 0;
+      const variance = actual - monthlyAmount; // positive = over budget
+      const varianceColor = variance > 0 ? 'var(--red)' : 'var(--accent)';
+      return `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text-dim);">${FY_MONTH_NAMES[i]}</td>
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); text-align:right;">${formatCurrency(Math.round(monthlyAmount), userCurrency)}</td>
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); text-align:right;">${formatCurrency(Math.round(actual), userCurrency)}</td>
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:${varianceColor}; text-align:right;">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</td>
+        </tr>`;
+    }).join('');
+
+    const tableEl = document.getElementById('catModalTable');
+    if (tableEl) {
+      tableEl.innerHTML = `
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);">
+            <th style="padding:6px 4px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); text-align:left; font-weight:400;">Month</th>
+            <th style="padding:6px 4px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); text-align:right; font-weight:400;">Budget</th>
+            <th style="padding:6px 4px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); text-align:right; font-weight:400;">Actual</th>
+            <th style="padding:6px 4px; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); text-align:right; font-weight:400;">Variance</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>`;
+    }
+
+    // Totals
+    const totalBudget  = cat.annualBudget;
+    const totalActual  = cat.annualActual;
+    const totalRemaining = totalBudget - totalActual;
+    const remainColor  = totalRemaining < 0 ? 'var(--red)' : 'var(--accent)';
+
+    const totalsEl = document.getElementById('catModalTotals');
+    if (totalsEl) {
+      totalsEl.innerHTML = `
+        <div>
+          <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Annual Budget</div>
+          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--text);">${formatCurrency(Math.round(totalBudget), userCurrency)}</div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Total Spent</div>
+          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--text);">${formatCurrency(Math.round(totalActual), userCurrency)}</div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Remaining</div>
+          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:${remainColor};">${formatCurrency(Math.round(Math.abs(totalRemaining)), userCurrency)}</div>
+        </div>`;
+    }
+
+    const nameEl = document.getElementById('catModalName');
+    if (nameEl) nameEl.textContent = cat.name;
+
+    const modal = document.getElementById('catModal');
+    if (modal) modal.style.display = 'block';
+  }
+
+  function closeCatModal(event?: MouseEvent) {
+    const modal = document.getElementById('catModal');
+    if (!modal) return;
+    if (event && event.target !== modal) return;
+    modal.style.display = 'none';
+  }
+
   // Make functions available globally
   window.loadYear = loadYear;
   window.updateExchangeRate = updateExchangeRate;
   window.handleSignOut = handleSignOut;
   window.changeFY = changeFY;
   window.toggleTheme = toggleTheme;
+  window.openCatModal = openCatModal;
+  window.closeCatModal = closeCatModal;
+  window.switchChartMode = switchChartMode;
+  window.switchAllChartMode = switchAllChartMode;
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('catModal');
+      if (modal && modal.style.display !== 'none') {
+        closeCatModal();
+      }
+    }
+  });
 
   // Initialize on load
   if (document.readyState === 'loading') {
@@ -634,10 +917,11 @@ import { supabase } from '../lib/supabase';
 
   body {
     background: var(--bg) !important;
+    padding: 40px 40px;
   }
 
   .page {
-    max-width: 1100px;
+    max-width: 1400px;
     background: var(--bg) !important;
   }
 
@@ -684,123 +968,179 @@ import { supabase } from '../lib/supabase';
     border-color: var(--accent);
   }
 
-  #monthlyBreakdown {
+  #categoryBreakdown {
     margin-bottom: 48px;
   }
 
-  #monthsContainer {
+  #categoriesContainer {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1px;
     background: var(--border) !important;
     border: 1px solid var(--border) !important;
     margin-top: 0;
   }
 
-  .month-card {
+  .cat-card {
     background: var(--surface) !important;
     padding: 20px;
-    transition: background 0.15s;
-    cursor: pointer;
     border: none;
   }
 
-  .month-card:hover {
-    background: var(--surface2) !important;
-  }
-
-  .month-header {
+  .cat-header {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 18px;
+    align-items: center;
+    margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
   }
 
-  .month-header h3 {
+  .cat-name {
     font-family: 'Fraunces', serif;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 300;
     font-style: italic;
     color: var(--text-dim) !important;
     letter-spacing: -0.01em;
-    margin: 0;
   }
 
-  .month-link {
-    color: var(--muted);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+  .cat-detail-btn {
     font-family: 'DM Mono', monospace;
-    transition: color 0.15s;
+    font-size: 11px;
+    padding: 4px 9px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
-  .month-card:hover .month-link {
+  .cat-detail-btn:hover {
     color: var(--accent);
+    border-color: var(--accent);
   }
 
-  .month-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px 24px;
-    margin-bottom: 18px;
+  .cat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
   }
 
-  .month-stat {
-    text-align: left;
-  }
-
-  .month-stat .label {
+  .cat-row .label {
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--muted) !important;
-    margin-bottom: 8px;
-    display: block;
-  }
-
-  .stat-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text) !important;
-    letter-spacing: -0.01em;
-    line-height: 1.4;
-  }
-
-  .stat-val.green { color: var(--accent) !important; }
-  .stat-val.red { color: var(--red) !important; }
-  .stat-val.ok { color: var(--accent) !important; }
-  .stat-val.over { color: var(--red) !important; }
-
-  .month-variance {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-    margin-top: 0;
-  }
-
-  .month-variance .label {
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
     margin: 0;
   }
 
-  .variance-val {
+  .cat-val {
     font-family: 'DM Mono', monospace;
     font-size: 13px;
     font-weight: 500;
-    color: var(--accent) !important;
+    color: var(--text) !important;
+    letter-spacing: -0.01em;
   }
 
-  .variance-val.over { color: var(--red) !important; }
-  .variance-val.ok { color: var(--accent) !important; }
+  .cat-val.green { color: var(--accent) !important; }
+  .cat-val.red { color: var(--red) !important; }
+
+  .cat-progress-track {
+    margin-top: 14px;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .cat-progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .cat-progress-bar.over {
+    background: var(--red);
+  }
+
+  /* ── Sparklines (inside unified cat-cards) ── */
+  .sparkline-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  .sparkline-ref {
+    stroke: var(--border);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    fill: none;
+  }
+
+  .sparkline-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .sparkline-dot {
+    fill: var(--accent);
+    stroke: none;
+  }
+
+  .chart-month-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+  }
+
+  .chart-month-labels span {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    flex: 1;
+  }
+
+  /* ── Sparkline chart mode toggle ── */
+  .chart-toggle-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 14px;
+  }
+
+  .chart-mode-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+
+  .chart-mode-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .chart-mode-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
 
 </style>
 </html>

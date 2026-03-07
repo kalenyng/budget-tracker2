@@ -967,11 +967,12 @@
       if (user) {
         const { data: settings } = await supabase
           .from('user_settings')
-          .select('preferred_currency')
+          .select('value')
           .eq('user_id', user.id)
+          .eq('key', 'preferred_currency')
           .maybeSingle();
-        if (settings?.preferred_currency) {
-          userCurrency = settings.preferred_currency as CurrencyCode;
+        if (settings?.value) {
+          userCurrency = settings.value as CurrencyCode;
         }
       }
 
