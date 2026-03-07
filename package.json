@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "astro": "^4.0.0"
+    "@types/papaparse": "^5.5.2",
+    "astro": "^4.0.0",
+    "papaparse": "^5.5.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.3.0",
