@@ -699,7 +699,7 @@ import { supabase } from '../lib/supabase';
       const groupBudget = groupItems.reduce((sum: number, item: CategoryData) => sum + item.budget, 0);
       const groupActual = groupItems.reduce((sum: number, item: CategoryData) => sum + item.actual, 0);
       const groupVariance = groupActual - groupBudget;
-      const groupVarianceClass = groupVariance > 0 ? 'over' : (groupVariance < -groupBudget * 0.1 ? 'ok' : '');
+      const groupVarianceClass = groupVariance > 0 ? 'over' : 'ok';
       
       // Initialize group state if not set (default to expanded)
       if (groupStates[groupName] === undefined) {
@@ -726,7 +726,7 @@ import { supabase } from '../lib/supabase';
           <span style="font-weight: 600; color: var(--text);">${formatCurrency(Math.round(groupActual), userCurrency)}</span>
         </td>
         <td class="budget-val ${groupVarianceClass}" style="text-align:right; padding-top: 16px; padding-bottom: 8px; font-weight: 600;">
-          ${formatCurrency(Math.round(groupVariance), userCurrency)}
+          ${formatCurrency(Math.round(Math.abs(groupVariance)), userCurrency)}
         </td>
       `;
       tbody.appendChild(groupHeader);
@@ -735,7 +735,7 @@ import { supabase } from '../lib/supabase';
       if (isExpanded) {
         groupItems.forEach((row: CategoryData) => {
           const variance = row.actual - row.budget;
-          const varianceClass = variance > 0 ? 'over' : (variance < -row.budget * 0.1 ? 'ok' : '');
+          const varianceClass = variance > 0 ? 'over' : 'ok';
           const tr = document.createElement('tr');
           tr.className = `group-item group-${groupName.replace(/\s+/g, '-')}`;
           tr.style.borderLeft = '2px solid var(--accent)';
@@ -756,10 +756,9 @@ import { supabase } from '../lib/supabase';
                 <button onclick="clearActual('${row.id}', '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--red); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 6px; cursor: pointer; border-radius: 3px; transition: all 0.15s; line-height: 1;" onmouseover="this.style.borderColor='var(--red)'; this.style.background='var(--surface)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface2)'" title="Clear actual amount">×</button>
                 <span class="currency-sym">${currencySym}</span>
                 <input class="budget-input-dark" type="number" value="${row.actual}" data-id="${row.id}" data-currency="${userCurrency}" data-type="actual" onchange="onActualChange('${row.id}', this, '${userCurrency}')" onblur="onActualChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
-                <span style="color: var(--text-dim); font-size: 11px; margin-left: 4px;">(${formatCurrency(Math.round(row.budget), userCurrency)})</span>
               </div>
             </td>
-            <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(variance), userCurrency)}</td>
+            <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</td>
           `;
           tbody.appendChild(tr);
         });
@@ -769,7 +768,7 @@ import { supabase } from '../lib/supabase';
     // Render ungrouped categories
     ungrouped.forEach((row, i) => {
       const variance = row.actual - row.budget;
-      const varianceClass = variance > 0 ? 'over' : (variance < -row.budget * 0.1 ? 'ok' : '');
+      const varianceClass = variance > 0 ? 'over' : 'ok';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="cat">
@@ -788,10 +787,9 @@ import { supabase } from '../lib/supabase';
             <button onclick="clearActual('${row.id}', '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--red); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 6px; cursor: pointer; border-radius: 3px; transition: all 0.15s; line-height: 1;" onmouseover="this.style.borderColor='var(--red)'; this.style.background='var(--surface)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='var(--surface2)'" title="Clear actual amount">×</button>
             <span class="currency-sym">${currencySym}</span>
             <input class="budget-input-dark" type="number" value="${row.actual}" data-id="${row.id}" data-currency="${userCurrency}" data-type="actual" onchange="onActualChange('${row.id}', this, '${userCurrency}')" onblur="onActualChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
-            <span style="color: var(--text-dim); font-size: 11px; margin-left: 4px;">(${formatCurrency(Math.round(row.budget), userCurrency)})</span>
           </div>
         </td>
-        <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(variance), userCurrency)}</td>
+        <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1164,8 +1162,8 @@ import { supabase } from '../lib/supabase';
     if (zarTotalBudgetEl) zarTotalBudgetEl.textContent = formatCurrency(Math.round(zarBudgetTotal), userCurrency);
     if (zarTotalActualEl) zarTotalActualEl.textContent = formatCurrency(Math.round(zarActualTotal), userCurrency);
     if (zarTotalVarianceEl) {
-      zarTotalVarianceEl.textContent = formatCurrency(Math.round(zarVariance), userCurrency);
-      zarTotalVarianceEl.className = 'budget-val ' + (zarVariance > 0 ? 'over' : (zarVariance < -zarBudgetTotal * 0.1 ? 'ok' : ''));
+      zarTotalVarianceEl.textContent = formatCurrency(Math.round(Math.abs(zarVariance)), userCurrency);
+      zarTotalVarianceEl.className = 'budget-val ' + (zarVariance > 0 ? 'over' : 'ok');
     }
 
     // Update summary cards
@@ -1194,7 +1192,7 @@ import { supabase } from '../lib/supabase';
       sumVarianceZarEl.style.color = zarVariance > 0 ? 'var(--red)' : 'var(--accent)';
     }
     if (sumNetZarEl) {
-      sumNetZarEl.textContent = formatCurrency(Math.round(zarNet), userCurrency);
+      sumNetZarEl.textContent = formatCurrency(Math.round(Math.abs(zarNet)), userCurrency);
       sumNetZarEl.className = 'val ' + (zarNet >= 0 ? 'green' : 'red');
     }
     if (sumNetNoteEl) {

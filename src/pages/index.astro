@@ -166,6 +166,8 @@ import { supabase } from '../lib/supabase';
       loadYear: () => Promise<void>;
       updateExchangeRate: () => Promise<void>;
       changeFY: (direction: number) => void;
+      handleSignOut: () => Promise<void>;
+      toggleTheme: () => void;
     }
   }
 
@@ -386,28 +388,12 @@ import { supabase } from '../lib/supabase';
         incomeMap[m] = (incomeMap[m] || 0) + parseFloat(inc.amount || 0);
       });
 
-      // Add carried over balances to each month's income
+      // Ensure every month has at least 0 in the incomeMap (no undefined / NaN)
+      // NOTE: carry-over balances are intentionally NOT added here — they would
+      // cause the same money to be counted multiple times in the yearly totals.
       for (let i = 0; i < months.length; i++) {
         const month = months[i];
-        // Ensure every month has at least 0 in the incomeMap (no undefined / NaN)
         if (incomeMap[month] === undefined) incomeMap[month] = 0;
-        if (i === 0) continue; // No previous month in this FY view for April
-        const prevMonthDate = new Date(month);
-        prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
-        const prevMonth = prevMonthDate.toISOString().slice(0, 7) + '-01';
-
-        const { data: prevBalance } = await supabase
-          .from('monthly_balances')
-          .select('ending_balance')
-          .eq('month', prevMonth)
-          .eq('user_id', user?.id)
-          .maybeSingle();
-
-        // Only add carried-over amount if ending_balance is explicitly set and greater than 0
-        const carryAmount = prevBalance?.ending_balance != null ? parseFloat(prevBalance.ending_balance) : 0;
-        if (carryAmount > 0) {
-          incomeMap[month] = (incomeMap[month] || 0) + carryAmount;
-        }
       }
 
       // Load budgets for all months (RLS should filter by user_id, but we'll be explicit)
@@ -513,7 +499,7 @@ import { supabase } from '../lib/supabase';
       };
 
       const variance = monthData.actual - monthData.budget;
-      const varianceClass = variance > 0 ? 'over' : (variance < -monthData.budget * 0.1 ? 'ok' : '');
+      const varianceClass = variance > 0 ? 'over' : 'ok';
 
       monthCard.innerHTML = `
         <div class="month-header">
@@ -534,13 +520,9 @@ import { supabase } from '../lib/supabase';
             <div class="stat-val">${formatCurrency(Math.round(monthData.actual), userCurrency)}</div>
           </div>
           <div class="month-stat">
-            <span class="label">Var</span>
-            <div class="stat-val ${monthData.net >= 0 ? 'green' : 'red'}">${formatCurrency(Math.round(monthData.net), userCurrency)}</div>
+            <span class="label">Variance</span>
+            <div class="stat-val ${varianceClass}">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</div>
           </div>
-        </div>
-        <div class="month-variance">
-          <span class="label">Variance</span>
-          <span class="variance-val ${varianceClass}">${formatCurrency(Math.round(variance), userCurrency)}</span>
         </div>
       `;
 
@@ -790,6 +772,8 @@ import { supabase } from '../lib/supabase';
 
   .stat-val.green { color: var(--accent) !important; }
   .stat-val.red { color: var(--red) !important; }
+  .stat-val.ok { color: var(--accent) !important; }
+  .stat-val.over { color: var(--red) !important; }
 
   .month-variance {
     display: flex;
