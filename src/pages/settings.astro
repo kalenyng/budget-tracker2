@@ -181,7 +181,7 @@ import { supabase } from '../lib/supabase';
         .eq('user_id', user.id);
 
       const settingsMap = Object.fromEntries((settingsRows || []).map(s => [s.key, s.value]));
-      userCurrency = settingsRows?.[0]?.preferred_currency || 'ZAR';
+      userCurrency = settingsMap['preferred_currency'] || 'ZAR';
       const showConversion = settingsMap['show_currency_conversion'] === 'true';
       const conversionCurrency = settingsMap['conversion_currency'] || 'GBP';
 
@@ -266,7 +266,7 @@ import { supabase } from '../lib/supabase';
           </div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 2px; align-items: flex-end; flex-shrink: 0;">
-          <label style="color: var(--text-dim); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Default budget</label>
+          <label style="color: var(--text-dim); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Monthly Budget (default)</label>
           <div style="display: flex; align-items: center; gap: 4px;">
             <span style="color: var(--muted); font-size: 11px;">${currencySymbol}</span>
             <input type="number"
