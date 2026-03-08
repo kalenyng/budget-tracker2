@@ -1,0 +1,1472 @@
+---
+// Mobile Transaction Sorter
+// Screen 1: CSV Upload → Screen 2: Card Sorter → Screen 3: Results
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Quick Sort · Budget Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ── Screen 1: Upload ──────────────────────────────────────────────────── -->
+<div id="uploadScreen" class="screen">
+  <div class="screen-inner">
+
+    <div class="upload-header">
+      <a href="/transactions" class="back-link">← Desktop View</a>
+      <div class="logo-label">QUICK SORT</div>
+    </div>
+
+    <div class="upload-hero">
+      <h1>Sort your<br><span>transactions.</span></h1>
+      <p>Upload a bank CSV and categorize every transaction with a tap.</p>
+    </div>
+
+    <!-- Drop zone -->
+    <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Upload CSV file">
+      <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none">
+      <div id="dropZoneIdle">
+        <div class="drop-icon">↑</div>
+        <div class="drop-label">Tap to upload CSV</div>
+        <div class="drop-sub">or drag &amp; drop</div>
+      </div>
+      <div id="dropZoneDone" style="display:none" class="drop-done">
+        <div class="done-check">✓</div>
+        <div id="doneFileName" class="done-name"></div>
+        <div id="doneRowCount" class="done-count"></div>
+      </div>
+    </div>
+
+    <div id="uploadError" class="upload-error" style="display:none"></div>
+
+    <!-- Column mapping — shown after file picked -->
+    <div id="mappingSection" class="mapping-section" style="display:none">
+      <div class="mapping-title">MAP COLUMNS</div>
+      <div class="mapping-rows">
+        <div class="mapping-row">
+          <span class="mapping-label">Date</span>
+          <select id="dateColSelect" class="mapping-select"></select>
+        </div>
+        <div class="mapping-row">
+          <span class="mapping-label">Description</span>
+          <select id="descColSelect" class="mapping-select"></select>
+        </div>
+        <div class="mapping-row">
+          <span class="mapping-label">Amount</span>
+          <select id="amountColSelect" class="mapping-select"></select>
+        </div>
+      </div>
+    </div>
+
+    <button id="startBtn" class="start-btn" style="display:none">
+      Start Sorting →
+    </button>
+
+  </div>
+</div>
+
+<!-- ── Screen 2: Sorter ──────────────────────────────────────────────────── -->
+<div id="sorterScreen" class="screen" style="display:none">
+  <div class="sorter-inner">
+
+    <!-- Top bar -->
+    <div class="sorter-topbar">
+      <button id="backBtn" class="topbar-back" aria-label="Back to upload">←</button>
+      <div class="progress-text">
+        <span id="progressCurrent">1</span>
+        <span class="progress-sep">/</span>
+        <span id="progressTotal">0</span>
+      </div>
+      <div class="progress-track">
+        <div id="progressFill" class="progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Card slot -->
+    <div class="card-slot" id="cardSlot">
+      <div id="txCard" class="tx-card">
+        <div class="card-amount-label">AMOUNT</div>
+        <div id="cardAmount" class="card-amount">—</div>
+        <div class="card-meta">
+          <div class="card-meta-row">
+            <span class="card-meta-key">DATE</span>
+            <span id="cardDate" class="card-meta-val">—</span>
+          </div>
+          <div class="card-meta-row">
+            <span class="card-meta-key">MERCHANT</span>
+            <span id="cardDesc" class="card-meta-val">—</span>
+          </div>
+          <div class="card-meta-row" id="suggestedRow" style="display:none">
+            <span class="card-meta-key">SUGGESTED</span>
+            <span id="cardSuggested" class="card-meta-val card-meta-suggested">—</span>
+          </div>
+        </div>
+        <button id="undoBtn" class="undo-btn" disabled aria-label="Undo last categorization">
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none">
+            <path d="M5.5 1L1 5.5L5.5 10M1 5.5H13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Spacer pushes categories toward the thumb zone -->
+    <div class="sorter-spacer"></div>
+
+    <!-- Category grid — populated by JS -->
+    <div id="categoryGrid" class="category-grid"></div>
+
+    <!-- Note input -->
+    <input
+      id="noteInput"
+      type="text"
+      class="note-input"
+      placeholder="Add a note…"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+    >
+
+  </div>
+</div>
+
+<!-- ── Screen 3: Results ─────────────────────────────────────────────────── -->
+<div id="resultsScreen" class="screen" style="display:none">
+  <div class="results-inner">
+
+    <div class="results-header">
+      <div class="results-done-label">ALL DONE</div>
+      <div class="results-check">✓</div>
+      <div class="results-subtitle">
+        <span id="resultsSortedCount">0</span> transactions sorted
+      </div>
+    </div>
+
+    <div id="resultsList" class="results-list"></div>
+
+    <div id="uncatSection" class="uncat-section" style="display:none">
+      <div id="uncatText" class="uncat-text"></div>
+    </div>
+
+    <div class="results-actions">
+      <button id="sortAgainBtn" class="start-btn">Sort Another File</button>
+      <a href="/transactions" class="results-back-link">← Desktop View</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  import { supabase }                           from '../lib/supabase';
+  import { getCurrentUser, onAuthStateChange }  from '../lib/auth';
+  import { getCurrencySymbol, type CurrencyCode } from '../lib/currency';
+
+  // ── Types ────────────────────────────────────────────────────────────────
+
+  interface ParsedTx {
+    id:           string;
+    date:         string;
+    description:  string;
+    amount:       number;
+    suggested:    string | null;
+    category:     string | null;
+    category_id:  string | null;
+    note:         string;
+  }
+
+  interface Category {
+    id:             string;
+    name:           string;
+    category_group: string | null;
+  }
+
+  // ── State ────────────────────────────────────────────────────────────────
+
+  let transactions:  ParsedTx[]  = [];
+  let categories:    Category[]  = [];
+  let currentIndex               = 0;
+  let historyStack: { index: number; category: string | null; note: string }[] = [];
+  let selectedCat:  string | null = null;
+  let animating                   = false;
+  let userCurrency: CurrencyCode  = 'ZAR';
+
+  // CSV state
+  let csvHeaders: string[]                 = [];
+  let csvRows: Record<string, string>[]    = [];
+
+  // ── Keyword → Category map ────────────────────────────────────────────────
+
+  const KEYWORD_MAP: { patterns: string[]; terms: string[] }[] = [
+    { patterns: ['netflix','spotify','apple.com','disney','showmax','youtube premium','prime video','dstv','hbo','subscription'], terms: ['subs','subscription'] },
+    { patterns: ['gym','planet fitness','virgin active','crossfit','fitness club','biokinetics'], terms: ['gym','fitness'] },
+    { patterns: ['checkers','woolworths','pick n pay','picknpay','shoprite','spar','food lovers','grocery','supermarket','clicks','dischem','game store'], terms: ['grocer','food shop'] },
+    { patterns: ['uber eats','mr d food','kfc','mcdonalds',"mcdonald's",'nandos',"nando's",'steers','debonairs','dominos','pizza','takeaway','takeout','burger king','chicken licken'], terms: ['takeout','food','eat','takeaway'] },
+    { patterns: ['uber','taxify','bolt','taxi','shuttle','transport','petrol','garage','bp ','sasol','shell ','engen','total petroleum','fuel'], terms: ['transport','travel','petrol','fuel'] },
+    { patterns: ['electricity','eskom','city power','prepaid power','electric','municipal electricity'], terms: ['electric','electricity','power'] },
+    { patterns: ['water','municipal water','municipality','water bill'], terms: ['water'] },
+    { patterns: ['discovery health','momentum health','medical aid','medihelp','bonitas','bestmed','health insurance','hospital plan'], terms: ['medical','health'] },
+    { patterns: ['rent','landlord','lease','rental payment','accommodation'], terms: ['rent','rental','lease'] },
+    { patterns: ['atm withdrawal','cash withdrawal','atm cash'], terms: ['misc','cash','atm'] },
+    { patterns: ['bank fee','service fee','monthly fee','admin fee','transaction fee','account fee','monthly charge'], terms: ['fee','charge'] },
+    { patterns: ['clothing','fashion','hair salon','beauty','spa','cosmetics','personal care','barber'], terms: ['personal','grooming','beauty'] },
+  ];
+
+  function suggestCategory(description: string): string | null {
+    const lower = description.toLowerCase();
+    for (const entry of KEYWORD_MAP) {
+      if (entry.patterns.some(p => lower.includes(p))) {
+        const match = categories.find(c => {
+          const cn = c.name.toLowerCase().replace(/[^a-z\s]/g, '');
+          return entry.terms.some(t => cn.includes(t));
+        });
+        if (match) return match.name;
+      }
+    }
+    return null;
+  }
+
+  // ── Fallback categories ────────────────────────────────────────────────────
+
+  const FALLBACK_CATEGORIES: Category[] = [
+    'RENT','MEDICAL AID','ELECTRIC','WATER','GYM','SUBS',
+    'TRANSPORT','GROCERIES','TAKEOUT','PERSONAL','MISC/CASH','FEES',
+  ].map((name, i) => ({ id: `fb-${i}`, name, category_group: null }));
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  async function checkAuth(): Promise<boolean> {
+    const user = await getCurrentUser();
+    if (!user) { window.location.href = '/auth'; return false; }
+    return true;
+  }
+
+  // ── Load data ─────────────────────────────────────────────────────────────
+
+  async function loadCategories() {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id, name, category_group')
+      .order('category_group', { ascending: true, nullsFirst: false })
+      .order('name', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      categories = FALLBACK_CATEGORIES;
+    } else {
+      categories = data.map(c => ({
+        id:             c.id             as string,
+        name:           c.name           as string,
+        category_group: (c.category_group as string | null) ?? null,
+      }));
+    }
+  }
+
+  async function loadCurrency() {
+    const user = await getCurrentUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('user_settings')
+      .select('value')
+      .eq('user_id', user.id)
+      .eq('key', 'preferred_currency')
+      .maybeSingle();
+    if (data?.value) userCurrency = data.value as CurrencyCode;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function fmtAmt(amount: number): string {
+    const sym = getCurrencySymbol(userCurrency);
+    const abs = Math.abs(amount).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return `${sym}${abs}`;
+  }
+
+  function fmtDate(dateStr: string): string {
+    const d = new Date(`${dateStr}T00:00:00`);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  // ── CSV parsing ───────────────────────────────────────────────────────────
+
+  function parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current  = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch   = line[i];
+      const next = line[i + 1];
+      if (ch === '"') {
+        if (inQuotes && next === '"') { current += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  function parseCSVFile(file: File): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const text  = (e.target as FileReader).result as string;
+          const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+          const headerLine = lines.find(l => l.trim());
+          if (!headerLine) { reject(new Error('File is empty')); return; }
+          const headers   = parseCSVLine(headerLine);
+          const headerIdx = lines.indexOf(headerLine);
+          const rows: Record<string, string>[] = [];
+          for (let i = headerIdx + 1; i < lines.length; i++) {
+            const ln = lines[i];
+            if (!ln.trim()) continue;
+            const vals = parseCSVLine(ln);
+            if (vals.every(v => v === '')) continue;
+            const row: Record<string, string> = {};
+            headers.forEach((h, hi) => { row[h] = vals[hi] ?? ''; });
+            rows.push(row);
+          }
+          resolve({ headers, rows });
+        } catch (err: any) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  function normalizeDate(raw: string): string | null {
+    if (!raw) return null;
+    const pats: [RegExp, (m: RegExpMatchArray) => string][] = [
+      [/^(\d{2})\/(\d{2})\/(\d{4})$/, m => `${m[3]}-${m[2]}-${m[1]}`],
+      [/^(\d{4})-(\d{2})-(\d{2})$/,   m => `${m[1]}-${m[2]}-${m[3]}`],
+      [/^(\d{2})-(\d{2})-(\d{4})$/,   m => `${m[3]}-${m[2]}-${m[1]}`],
+    ];
+    for (const [re, fn] of pats) {
+      const m = raw.match(re);
+      if (m) return fn(m);
+    }
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+
+  function parseAmount(raw: string): number | null {
+    if (!raw) return null;
+    let s   = raw.replace(/[R$£€,\s]/g, '').trim();
+    const neg = s.startsWith('-') || /dr$/i.test(s);
+    s = s.replace(/^-/, '').replace(/dr$/i, '');
+    const n = parseFloat(s);
+    if (isNaN(n)) return null;
+    return neg ? -n : n;
+  }
+
+  // ── File handling ─────────────────────────────────────────────────────────
+
+  async function handleFileChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+
+    hideError();
+
+    try {
+      const { headers, rows } = await parseCSVFile(file);
+      if (headers.length === 0) { showError('No column headers found. Make sure your CSV has a header row.'); return; }
+      if (rows.length    === 0) { showError('No data rows found after the header.'); return; }
+
+      csvHeaders = headers;
+      csvRows    = rows;
+
+      // Update drop zone
+      document.getElementById('dropZoneIdle')!.style.display = 'none';
+      const done = document.getElementById('dropZoneDone')!;
+      done.style.display = 'flex';
+      document.getElementById('doneFileName')!.textContent = file.name;
+      document.getElementById('doneRowCount')!.textContent = `${rows.length} transaction${rows.length !== 1 ? 's' : ''} found`;
+
+      // Populate mapping
+      populateMappingDropdowns();
+      document.getElementById('mappingSection')!.style.display = 'block';
+      document.getElementById('startBtn')!.style.display       = 'block';
+
+    } catch (err: any) {
+      showError(`Could not parse CSV: ${err.message}`);
+    }
+  }
+
+  function populateMappingDropdowns() {
+    const ids     = ['dateColSelect', 'descColSelect', 'amountColSelect'] as const;
+    const selects = ids.map(id => document.getElementById(id) as HTMLSelectElement);
+    const html    = csvHeaders.map(h => `<option value="${escAttr(h)}">${h}</option>`).join('');
+    selects.forEach(s => { s.innerHTML = html; });
+
+    const lower   = csvHeaders.map(h => h.toLowerCase());
+    const pick    = (re: RegExp) => lower.findIndex(h => re.test(h));
+    const dateIdx = pick(/\bdate\b|datum|txdate|transaction[_\s]?date/);
+    const descIdx = pick(/\bdescr?|narr|detail|memo|\bpayee\b|particulars|reference/);
+    const amtIdx  = pick(/\bamount\b|\bamt\b|\bdebit\b|\bcredit\b|\bvalue\b/);
+    if (dateIdx >= 0) selects[0].selectedIndex = dateIdx;
+    if (descIdx >= 0) selects[1].selectedIndex = descIdx;
+    if (amtIdx  >= 0) selects[2].selectedIndex = amtIdx;
+  }
+
+  function showError(msg: string) {
+    const el = document.getElementById('uploadError')!;
+    el.textContent   = msg;
+    el.style.display = 'block';
+  }
+  function hideError() {
+    const el = document.getElementById('uploadError')!;
+    el.style.display = 'none';
+  }
+  function escAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  // ── Start sorting ─────────────────────────────────────────────────────────
+
+  function startSorting() {
+    hideError();
+    const dateCol   = (document.getElementById('dateColSelect')   as HTMLSelectElement).value;
+    const descCol   = (document.getElementById('descColSelect')   as HTMLSelectElement).value;
+    const amountCol = (document.getElementById('amountColSelect') as HTMLSelectElement).value;
+
+    const parsed: ParsedTx[] = [];
+    let skipped = 0;
+
+    csvRows.forEach((row, i) => {
+      const dateRaw   = String(row[dateCol]   ?? '').trim();
+      const desc      = String(row[descCol]   ?? '').trim();
+      const amountRaw = String(row[amountCol] ?? '').trim();
+      if (!dateRaw && !desc && !amountRaw) return;
+
+      const date   = normalizeDate(dateRaw);
+      const amount = parseAmount(amountRaw);
+      if (date === null || amount === null) { skipped++; return; }
+
+      parsed.push({
+        id:          `tx-${i}`,
+        date,
+        description: desc || '(no description)',
+        amount,
+        suggested:   suggestCategory(desc),
+        category:    null,
+        category_id: null,
+        note:        '',
+      });
+    });
+
+    if (parsed.length === 0) {
+      showError('No valid transactions found. Check your column mapping and try again.');
+      return;
+    }
+
+    transactions = parsed;
+    currentIndex = 0;
+    historyStack = [];
+    selectedCat  = null;
+
+    // Build category grid buttons
+    buildCategoryGrid();
+
+    showScreen('sorterScreen');
+    renderCard('forward', true);
+    updateProgress();
+  }
+
+  // ── Screen management ─────────────────────────────────────────────────────
+
+  function showScreen(id: 'uploadScreen' | 'sorterScreen' | 'resultsScreen') {
+    (['uploadScreen', 'sorterScreen', 'resultsScreen'] as const).forEach(sid => {
+      (document.getElementById(sid) as HTMLElement).style.display = sid === id ? 'flex' : 'none';
+    });
+  }
+
+  // ── Category grid ─────────────────────────────────────────────────────────
+
+  function buildCategoryGrid() {
+    const grid = document.getElementById('categoryGrid')!;
+    grid.innerHTML = '';
+    categories.forEach(cat => {
+      const btn       = document.createElement('button');
+      btn.className   = 'cat-btn';
+      btn.dataset.cat = cat.name;
+      btn.textContent = cat.name;
+      btn.addEventListener('click', () => handleCategory(cat.name));
+      grid.appendChild(btn);
+    });
+    // SKIP — always occupies the last grid slot
+    const skip          = document.createElement('button');
+    skip.className      = 'cat-btn skip-btn';
+    skip.dataset.cat    = ''; // sentinel: not a real category
+    skip.textContent    = 'SKIP';
+    skip.setAttribute('aria-label', 'Skip this transaction without categorising');
+    skip.addEventListener('click', handleSkip);
+    grid.appendChild(skip);
+  }
+
+  function syncCategoryGrid() {
+    const tx = transactions[currentIndex];
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      const name = btn.dataset.cat!;
+      btn.classList.remove('cat-suggested', 'cat-selected', 'cat-dimmed');
+      btn.disabled = false;
+      if (name === '') return; // SKIP button — no state decoration
+      // If this transaction already has a stored category, show it as selected
+      if (tx?.category && name === tx.category) {
+        btn.classList.add('cat-selected');
+      } else if (!tx?.category && tx?.suggested === name) {
+        // No selection yet — show suggestion glow
+        btn.classList.add('cat-suggested');
+      }
+    });
+  }
+
+  // ── Card content update ───────────────────────────────────────────────────
+
+  function updateCardContent() {
+    if (currentIndex >= transactions.length) return;
+    const tx = transactions[currentIndex];
+
+    document.getElementById('cardAmount')!.textContent = fmtAmt(tx.amount);
+    document.getElementById('cardDate')!.textContent   = fmtDate(tx.date);
+    document.getElementById('cardDesc')!.textContent   = tx.description;
+
+    const sugRow = document.getElementById('suggestedRow')!;
+    if (tx.suggested) {
+      document.getElementById('cardSuggested')!.textContent = tx.suggested;
+      sugRow.style.display = '';
+    } else {
+      sugRow.style.display = 'none';
+    }
+
+    (document.getElementById('noteInput') as HTMLInputElement).value = tx.note;
+    (document.getElementById('undoBtn') as HTMLButtonElement).disabled = historyStack.length === 0;
+  }
+
+  // ── Card rendering ────────────────────────────────────────────────────────
+
+  function renderCard(direction: 'forward' | 'backward', skipAnim = false) {
+    if (currentIndex >= transactions.length) return;
+
+    updateCardContent();
+    syncCategoryGrid();
+
+    if (skipAnim) {
+      // Reset any in-flight inline styles
+      const card = document.getElementById('txCard')!;
+      card.style.transition = '';
+      card.style.transform  = '';
+      card.style.opacity    = '';
+    } else {
+      slideCardIn(direction);
+    }
+  }
+
+  // ── Animation: CSS transition-based horizontal slide ──────────────────────
+
+  /** Slide the tx card out. Returns a promise that resolves after the transition. */
+  async function slideCardOut(direction: 'forward' | 'backward'): Promise<void> {
+    const card = document.getElementById('txCard')!;
+    const toX  = direction === 'forward' ? '-100%' : '100%';
+    card.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
+    card.style.transform  = `translateX(${toX})`;
+    card.style.opacity    = '0.2';
+    await sleep(260); // wait for transition to finish
+  }
+
+  /** Slide the tx card in from the opposite edge. */
+  function slideCardIn(direction: 'forward' | 'backward') {
+    const card  = document.getElementById('txCard')!;
+    const fromX = direction === 'forward' ? '100%' : '-100%';
+    // Jump to start position instantly (no transition)
+    card.style.transition = 'none';
+    card.style.transform  = `translateX(${fromX})`;
+    card.style.opacity    = '0.2';
+    void card.offsetHeight; // force reflow
+    // Animate to centre
+    card.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
+    card.style.transform  = 'translateX(0)';
+    card.style.opacity    = '1';
+  }
+
+  /** Animate the category grid in using existing CSS keyframe classes. */
+  function slideCatsIn(direction: 'forward' | 'backward') {
+    const grid = document.getElementById('categoryGrid')!;
+    const cls  = `cats-enter-${direction}`;
+    grid.classList.remove('cats-enter-forward', 'cats-enter-backward');
+    void grid.offsetHeight;
+    grid.classList.add(cls);
+    grid.addEventListener('animationend', () => grid.classList.remove(cls), { once: true });
+  }
+
+  // ── Category selection ────────────────────────────────────────────────────
+
+  async function handleCategory(catName: string) {
+    if (animating || selectedCat) return;
+    animating   = true;
+    selectedCat = catName;
+
+    const cat = categories.find(c => c.name === catName);
+
+    // Drop focus from the button only — never blur noteInput (that would dismiss the keyboard mid-animation)
+    const active = document.activeElement as HTMLElement;
+    if (active?.classList.contains('cat-btn')) active.blur();
+
+    // Immediate visual feedback — selected button lights up, others dim
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      btn.classList.remove('cat-suggested', 'cat-selected');
+      if (btn.dataset.cat === catName) btn.classList.add('cat-selected');
+      else btn.classList.add('cat-dimmed');
+      btn.disabled = true;
+    });
+
+    // Store selection on the transaction object
+    transactions[currentIndex].note        = (document.getElementById('noteInput') as HTMLInputElement).value;
+    transactions[currentIndex].category    = catName;
+    transactions[currentIndex].category_id = cat?.id ?? null;
+
+    await sleep(400); // visual feedback window
+
+    historyStack.push({ index: currentIndex, category: catName, note: transactions[currentIndex].note });
+
+    if (currentIndex >= transactions.length - 1) {
+      // All done — slide card out then show completion
+      await slideCardOut('forward');
+      showCompletionCard();
+    } else {
+      await slideCardOut('forward');
+      currentIndex++;
+      selectedCat = null;
+      // Clear dimmed/disabled state before rendering new card
+      document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+        btn.classList.remove('cat-selected', 'cat-dimmed');
+        btn.disabled = false;
+      });
+      renderCard('forward');
+      updateProgress();
+    }
+
+    animating = false;
+  }
+
+  // ── Skip (advance without categorising) ───────────────────────────────────
+
+  async function handleSkip() {
+    if (animating || selectedCat) return;
+    animating = true;
+
+    // Drop focus from the button only — never blur noteInput
+    const active = document.activeElement as HTMLElement;
+    if (active?.classList.contains('cat-btn')) active.blur();
+
+    // Dim all buttons briefly to acknowledge the tap
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      btn.disabled = true;
+      btn.classList.add('cat-dimmed');
+    });
+
+    // Save note; leave tx.category as null
+    transactions[currentIndex].note = (document.getElementById('noteInput') as HTMLInputElement).value;
+
+    await sleep(200);
+
+    historyStack.push({ index: currentIndex, category: null, note: transactions[currentIndex].note });
+
+    if (currentIndex >= transactions.length - 1) {
+      await slideCardOut('forward');
+      showCompletionCard();
+    } else {
+      await slideCardOut('forward');
+      currentIndex++;
+      selectedCat = null;
+      document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+        btn.classList.remove('cat-dimmed');
+        btn.disabled = false;
+      });
+      renderCard('forward');
+      updateProgress();
+    }
+
+    animating = false;
+  }
+
+  // ── Undo ──────────────────────────────────────────────────────────────────
+
+  async function handleUndo() {
+    if (historyStack.length === 0 || animating || selectedCat) return;
+    animating = true;
+
+    // If currently showing the completion card, remove it and restore txCard
+    const comp   = document.getElementById('completionCard');
+    const txCard = document.getElementById('txCard')!;
+    if (comp) {
+      comp.remove();
+      txCard.style.display    = '';
+      txCard.style.transition = 'none';
+      txCard.style.transform  = 'translateX(0)';
+      txCard.style.opacity    = '1';
+      document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+        btn.classList.remove('cat-disabled');
+        btn.disabled = false;
+      });
+    }
+
+    const prev   = historyStack.pop()!;
+    currentIndex = prev.index;
+    // Restore saved note but KEEP tx.category — syncCategoryGrid will show it as selected
+    transactions[currentIndex].note = prev.note;
+
+    // Clear any dimmed state
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      btn.classList.remove('cat-dimmed', 'cat-disabled');
+      btn.disabled = false;
+    });
+
+    renderCard('backward');
+    updateProgress();
+    animating   = false;
+    selectedCat = null;
+  }
+
+  // ── Completion card ───────────────────────────────────────────────────────
+
+  function showCompletionCard() {
+    const slot   = document.getElementById('cardSlot')!;
+    const txCard = document.getElementById('txCard')!;
+    txCard.style.display = 'none';
+
+    const done = document.createElement('div');
+    done.id        = 'completionCard';
+    done.className = 'tx-card completion-card';
+
+    // Start off-screen right
+    done.style.transition = 'none';
+    done.style.transform  = 'translateX(100%)';
+    done.style.opacity    = '0.2';
+
+    done.innerHTML = `
+      <div class="comp-label">ALL DONE</div>
+      <div class="comp-check">✓</div>
+      <div class="comp-count">${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} sorted</div>
+      <button id="viewResultsBtn" class="view-results-btn">View Results →</button>
+    `;
+    slot.appendChild(done);
+
+    // Force reflow then slide in
+    void done.offsetHeight;
+    done.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
+    done.style.transform  = 'translateX(0)';
+    done.style.opacity    = '1';
+
+    document.getElementById('viewResultsBtn')!.addEventListener('click', showResults);
+    (document.getElementById('undoBtn') as HTMLButtonElement).disabled = false;
+
+    // Disable category buttons while on completion screen
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      btn.disabled = true;
+      btn.classList.add('cat-disabled');
+    });
+  }
+
+  // ── Progress ──────────────────────────────────────────────────────────────
+
+  function updateProgress() {
+    const sorted = historyStack.length;
+    const total  = transactions.length;
+    const display = Math.min(sorted + 1, total);
+    document.getElementById('progressCurrent')!.textContent = String(display);
+    document.getElementById('progressTotal')!.textContent   = String(total);
+    const pct = total > 0 ? (sorted / total) * 100 : 0;
+    (document.getElementById('progressFill') as HTMLElement).style.width = `${pct}%`;
+  }
+
+  // ── Results screen ────────────────────────────────────────────────────────
+
+  function showResults() {
+    const totals: Record<string, { amount: number; count: number }> = {};
+    let uncatAmount = 0;
+    let uncatCount  = 0;
+
+    transactions.forEach(tx => {
+      if (!tx.category) { uncatAmount += tx.amount; uncatCount++; return; }
+      if (!totals[tx.category]) totals[tx.category] = { amount: 0, count: 0 };
+      totals[tx.category].amount += tx.amount;
+      totals[tx.category].count++;
+    });
+
+    const sorted = Object.entries(totals).sort((a, b) => Math.abs(b[1].amount) - Math.abs(a[1].amount));
+    const list   = document.getElementById('resultsList')!;
+    list.innerHTML = '';
+
+    if (sorted.length === 0) {
+      list.innerHTML = '<div class="results-empty">No categorized transactions.</div>';
+    } else {
+      sorted.forEach(([catName, { amount, count }]) => {
+        const row = document.createElement('div');
+        row.className = 'results-row';
+        row.innerHTML = `
+          <div class="results-cat-info">
+            <div class="results-cat-name">${catName}</div>
+            <div class="results-cat-count">${count} transaction${count !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="results-amount ${amount < 0 ? 'amount-neg' : 'amount-pos'}">${fmtAmt(amount)}</div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    const uncatEl = document.getElementById('uncatSection')!;
+    if (uncatCount > 0) {
+      document.getElementById('uncatText')!.textContent =
+        `${uncatCount} uncategorized · ${fmtAmt(uncatAmount)}`;
+      uncatEl.style.display = 'block';
+    } else {
+      uncatEl.style.display = 'none';
+    }
+
+    const catCount = transactions.filter(t => t.category !== null).length;
+    document.getElementById('resultsSortedCount')!.textContent = String(catCount);
+
+    showScreen('resultsScreen');
+  }
+
+  // ── Reset / restart ───────────────────────────────────────────────────────
+
+  function restartSort() {
+    transactions = [];
+    csvHeaders   = [];
+    csvRows      = [];
+    historyStack = [];
+    selectedCat  = null;
+    currentIndex = 0;
+    animating    = false;
+
+    (document.getElementById('csvFileInput') as HTMLInputElement).value = '';
+    document.getElementById('dropZoneIdle')!.style.display  = '';
+    document.getElementById('dropZoneDone')!.style.display  = 'none';
+    document.getElementById('mappingSection')!.style.display = 'none';
+    document.getElementById('startBtn')!.style.display       = 'none';
+    hideError();
+
+    // Remove completion card if present
+    document.getElementById('completionCard')?.remove();
+    document.getElementById('txCard')!.style.display = '';
+
+    showScreen('uploadScreen');
+  }
+
+  // ── Swipe gesture ─────────────────────────────────────────────────────────
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  function initSwipe() {
+    const slot = document.getElementById('cardSlot')!;
+    slot.addEventListener('touchstart', (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    slot.addEventListener('touchend', (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+      if (dx < -60 && dy < 50) handleUndo();
+    }, { passive: true });
+  }
+
+  // ── Util ──────────────────────────────────────────────────────────────────
+
+  function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  async function init() {
+    onAuthStateChange((_event, session) => {
+      if (!session?.user) window.location.href = '/auth';
+    });
+
+    const ok = await checkAuth();
+    if (!ok) return;
+
+    await Promise.all([loadCategories(), loadCurrency()]);
+
+    // File input
+    const fileInput = document.getElementById('csvFileInput') as HTMLInputElement;
+    const dropZone  = document.getElementById('dropZone')!;
+
+    fileInput.addEventListener('change', handleFileChange);
+
+    dropZone.addEventListener('click', () => {
+      // Don't open file picker if clicking start button or selects
+      fileInput.click();
+    });
+    dropZone.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+
+    // Drag and drop
+    dropZone.addEventListener('dragover', (e: DragEvent) => {
+      e.preventDefault();
+      dropZone.classList.add('drop-active');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drop-active'));
+    dropZone.addEventListener('drop', (e: DragEvent) => {
+      e.preventDefault();
+      dropZone.classList.remove('drop-active');
+      const file = e.dataTransfer?.files[0];
+      if (file) {
+        const dt   = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        handleFileChange({ target: fileInput } as any);
+      }
+    });
+
+    // Buttons
+    document.getElementById('startBtn')!.addEventListener('click', startSorting);
+    document.getElementById('undoBtn')!.addEventListener('click', handleUndo);
+    document.getElementById('sortAgainBtn')!.addEventListener('click', restartSort);
+    document.getElementById('backBtn')!.addEventListener('click', () => {
+      if (confirm('Go back to upload? Your progress will be lost.')) restartSort();
+    });
+
+    initSwipe();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
+
+<style is:global>
+  /* ── Reset ──────────────────────────────────────────────────────────────── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: #0d0f0e;
+    min-height: 100vh;
+    font-family: 'DM Mono', monospace;
+    -webkit-font-smoothing: antialiased;
+    padding: 0; /* override global */
+  }
+
+  /* ── Screens ────────────────────────────────────────────────────────────── */
+  .screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     UPLOAD SCREEN
+     ══════════════════════════════════════════════════════════════════════ */
+  .screen-inner {
+    width: 100%;
+    max-width: 480px;
+    padding: 52px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .upload-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .back-link {
+    color: #5a6358;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .back-link:hover { color: #c8f560; }
+
+  .logo-label {
+    color: #c8f560;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+  }
+
+  /* Hero */
+  .upload-hero h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(36px, 10vw, 52px);
+    font-weight: 700;
+    line-height: 1.08;
+    color: #d8e0d4;
+    letter-spacing: -0.02em;
+  }
+  .upload-hero h1 span { color: #c8f560; }
+  .upload-hero p {
+    margin-top: 12px;
+    color: #5a6358;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1.5px dashed #2a2f28;
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    outline: none;
+  }
+  .drop-zone:hover,
+  .drop-zone:focus,
+  .drop-active {
+    border-color: rgba(200,245,96,0.5);
+    background: rgba(200,245,96,0.025);
+  }
+
+  .drop-icon  { font-size: 28px; color: #c8f560; margin-bottom: 10px; }
+  .drop-label { color: #d8e0d4; font-size: 13px; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .drop-sub   { color: #5a6358; font-size: 11px; }
+
+  .drop-done {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .done-check { color: #c8f560; font-size: 24px; margin-bottom: 4px; }
+  .done-name  { color: #d8e0d4; font-size: 12px; word-break: break-all; }
+  .done-count { color: #5a6358; font-size: 11px; margin-top: 2px; }
+
+  /* Upload error */
+  .upload-error {
+    background: rgba(245,96,96,0.08);
+    border: 1px solid rgba(245,96,96,0.28);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: #f56060;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* Column mapping */
+  .mapping-section {
+    background: #151815;
+    border: 1px solid #2a2f28;
+    border-radius: 14px;
+    padding: 20px;
+  }
+  .mapping-title {
+    color: #5a6358;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    margin-bottom: 18px;
+  }
+  .mapping-rows { display: flex; flex-direction: column; gap: 14px; }
+  .mapping-row  { display: flex; align-items: center; gap: 14px; }
+  .mapping-label {
+    color: #8a9688;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    width: 80px;
+    flex-shrink: 0;
+  }
+  .mapping-select {
+    flex: 1;
+    background: #1c201b;
+    border: 1px solid #2a2f28;
+    border-radius: 8px;
+    color: #c8f560;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 9px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  .mapping-select:focus { border-color: rgba(200,245,96,0.4); }
+
+  /* Start button */
+  .start-btn {
+    background: #c8f560;
+    border: none;
+    border-radius: 12px;
+    color: #0d0f0e;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    padding: 17px;
+    width: 100%;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .start-btn:hover  { opacity: 0.9; }
+  .start-btn:active { transform: scale(0.98); }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     SORTER SCREEN
+     ══════════════════════════════════════════════════════════════════════ */
+  .sorter-inner {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0 20px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Top bar */
+  .sorter-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    flex-shrink: 0;
+  }
+
+  .topbar-back {
+    background: #1c201b;
+    border: 1px solid #2a2f28;
+    border-radius: 8px;
+    color: #8a9688;
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    padding: 8px 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+    line-height: 1;
+  }
+  .topbar-back:hover { color: #c8f560; border-color: rgba(200,245,96,0.35); }
+
+  .progress-text {
+    color: #5a6358;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+    min-width: 36px;
+  }
+  .progress-sep { margin: 0 1px; }
+
+  .progress-track {
+    flex: 1;
+    height: 2px;
+    background: #2a2f28;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: #c8f560;
+    border-radius: 1px;
+    transition: width 0.45s cubic-bezier(0.22,1,0.36,1);
+  }
+
+  /* Card slot */
+  .card-slot {
+    position: relative;
+    height: 240px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .tx-card {
+    position: absolute;
+    inset: 0;
+    background: #1c201b;
+    border: 1px solid #2a2f28;
+    border-radius: 18px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    touch-action: pan-y;
+  }
+
+  .card-amount-label {
+    color: #3a4038;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .card-amount {
+    font-family: 'Fraunces', serif;
+    font-size: 48px;
+    font-weight: 300;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 20px;
+  }
+
+  .card-meta     { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .card-meta-row { display: flex; align-items: baseline; gap: 0; }
+  .card-meta-key {
+    color: #3a4038;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    min-width: 84px;
+    flex-shrink: 0;
+  }
+  .card-meta-val {
+    color: #c8f560;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 84px);
+  }
+  .card-meta-suggested { color: rgba(200,245,96,0.85); }
+
+  .undo-btn {
+    position: absolute;
+    bottom: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: rgba(200,245,96,0.28);
+    transition: color 0.2s, transform 0.15s;
+  }
+  .undo-btn:not([disabled]):hover { color: rgba(200,245,96,0.7); transform: scale(1.2); }
+  .undo-btn[disabled] { opacity: 0.18; cursor: default; }
+
+  /* Spacer */
+  .sorter-spacer { flex: 1; min-height: 6px; max-height: 36px; }
+
+  /* Category grid — keypad-style 3-column layout */
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Base button — matches global .currency-btn; large tap target */
+  .cat-btn {
+    background: #1c201b;
+    border: 1px solid #2a2f28;
+    border-radius: 4px;
+    color: #8a9688;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 20px 12px;
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.3;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s, box-shadow 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cat-btn:focus          { outline: none; }
+  .cat-btn:focus-visible  { outline: 2px solid rgba(200, 245, 96, 0.5); outline-offset: 2px; }
+  .cat-btn:hover:not([disabled]) {
+    border-color: #c8f560;
+    color: #c8f560;
+  }
+  .cat-btn:active:not([disabled]) { opacity: 0.75; }
+
+  /* Suggested — prominent glow, NOT selected */
+  .cat-btn.cat-suggested {
+    border-color: #c8f560;
+    color: #c8f560;
+    box-shadow: 0 0 16px rgba(200, 245, 96, 0.5), 0 0 4px rgba(200, 245, 96, 0.8);
+  }
+  @media (prefers-color-scheme: light) {
+    .cat-btn.cat-suggested {
+      box-shadow: 0 0 16px rgba(143, 184, 0, 0.5), 0 0 4px rgba(143, 184, 0, 0.8);
+    }
+  }
+
+  /* Selected — filled accent */
+  .cat-btn.cat-selected {
+    background: #c8f560;
+    border-color: #c8f560;
+    color: #0d0f0e;
+    box-shadow: none;
+  }
+
+  /* SKIP — muted, de-emphasised */
+  .cat-btn.skip-btn {
+    color: #3a4038;
+    border-color: #1e211d;
+    background: transparent;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+  .cat-btn.skip-btn:hover:not([disabled]) {
+    color: #5a6358;
+    border-color: #2a2f28;
+  }
+
+  .cat-btn.cat-dimmed   { opacity: 0.22; }
+  .cat-btn.cat-disabled { opacity: 0.14; cursor: default; }
+
+  /* Note input */
+  .note-input {
+    background: #1c201b;
+    border: 1px solid #2a2f28;
+    border-radius: 10px;
+    color: #c8f560;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    padding: 13px 14px;
+    outline: none;
+    width: 100%;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+  .note-input::placeholder { color: #353a34; }
+  .note-input:focus { border-color: rgba(200,245,96,0.32); }
+
+  /* Completion card */
+  .completion-card {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .comp-label { color: #c8f560; font-size: 10px; letter-spacing: 0.22em; }
+  .comp-check { color: #fff; font-size: 30px; font-family: 'Fraunces', serif; }
+  .comp-count { color: #5a6358; font-size: 10px; letter-spacing: 0.1em; margin-bottom: 10px; }
+
+  .view-results-btn {
+    background: #c8f560;
+    border: none;
+    border-radius: 8px;
+    color: #0d0f0e;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 10px 22px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    font-weight: 500;
+  }
+  .view-results-btn:hover { opacity: 0.88; }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     RESULTS SCREEN
+     ══════════════════════════════════════════════════════════════════════ */
+  .results-inner {
+    width: 100%;
+    max-width: 480px;
+    padding: 52px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding-bottom: max(48px, env(safe-area-inset-bottom));
+  }
+
+  .results-header   { text-align: center; }
+  .results-done-label { color: #c8f560; font-size: 10px; letter-spacing: 0.22em; margin-bottom: 10px; }
+  .results-check    { color: #fff; font-size: 32px; font-family: 'Fraunces', serif; margin-bottom: 6px; }
+  .results-subtitle { color: #5a6358; font-size: 12px; letter-spacing: 0.06em; }
+
+  .results-list {
+    background: #151815;
+    border: 1px solid #2a2f28;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .results-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid #1e221d;
+    transition: background 0.12s;
+  }
+  .results-row:last-child { border-bottom: none; }
+  .results-row:hover { background: rgba(200,245,96,0.025); }
+
+  .results-cat-name  { color: #d8e0d4; font-size: 12px; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .results-cat-count { color: #5a6358; font-size: 10px; }
+
+  .results-amount {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 300;
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+  .amount-pos { color: #c8f560; }
+  .amount-neg { color: #f56060; }
+
+  .results-empty { color: #5a6358; font-size: 12px; padding: 24px; text-align: center; }
+
+  .uncat-section {
+    background: rgba(245,96,96,0.06);
+    border: 1px solid rgba(245,96,96,0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .uncat-text { color: #f56060; font-size: 11px; letter-spacing: 0.05em; }
+
+  .results-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .results-back-link {
+    color: #5a6358;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .results-back-link:hover { color: #c8f560; }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ANIMATIONS
+     Card slides are driven by inline CSS transitions (see slideCardOut/In).
+     Category grid uses keyframe animations for a subtle cross-axis feel.
+     ══════════════════════════════════════════════════════════════════════ */
+  @keyframes catsEnterForward {
+    from { transform: translateX(40px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+  @keyframes catsEnterBackward {
+    from { transform: translateX(-40px); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+  }
+
+  .cats-enter-forward  { animation: catsEnterForward  0.28s cubic-bezier(0.22,1,0.36,1) both; }
+  .cats-enter-backward { animation: catsEnterBackward 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+</style>
+
+</body>
+</html>
