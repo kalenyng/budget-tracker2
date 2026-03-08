@@ -135,6 +135,27 @@ import { supabase } from '../lib/supabase';
     </div>
   </div>
 
+  <!-- Imported Transactions Section -->
+  <div id="importedTxSection" style="display:none; margin-bottom: 48px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+      <div class="section-title" style="margin-bottom: 0;">Imported Transactions</div>
+      <button id="importedTxToggleBtn" onclick="toggleImportedTx()" style="background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.borderColor='var(--accent)'; this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-dim)'">View Transactions</button>
+    </div>
+    <div id="importedTxTable" style="display:none; overflow-x: auto; border: 1px solid var(--border); border-radius: 4px;">
+      <table style="width:100%; border-collapse: collapse; font-family: 'DM Mono', monospace; font-size: 12px;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding: 8px 12px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid var(--border); background: var(--surface2); white-space: nowrap;">Date</th>
+            <th style="text-align:left; padding: 8px 12px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid var(--border); background: var(--surface2);">Description</th>
+            <th style="text-align:right; padding: 8px 12px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid var(--border); background: var(--surface2); white-space: nowrap;">Amount</th>
+            <th style="text-align:left; padding: 8px 12px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid var(--border); background: var(--surface2);">Category</th>
+          </tr>
+        </thead>
+        <tbody id="importedTxBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Budget Section -->
   <div id="zarSection">
     <div class="section-title" id="budgetSectionTitle">Monthly Budget</div>
@@ -261,7 +282,18 @@ import { supabase } from '../lib/supabase';
       loadMonth: () => Promise<void>;
       handleSignOut: () => Promise<void>;
       changeMonth: (direction: number) => void;
+      toggleImportedTx: () => void;
+      onImportedTxCategoryChange: (txId: string, oldCategoryId: string | null, select: HTMLSelectElement) => Promise<void>;
     }
+  }
+
+  interface ImportedTx {
+    id: string;
+    date: string | null;
+    description: string | null;
+    amount: number;
+    category_id: string | null;
+    manually_edited: boolean;
   }
 
   let currentMonth = new Date().toISOString().slice(0, 7) + '-01';
@@ -662,11 +694,172 @@ import { supabase } from '../lib/supabase';
       refreshTotals();
       await loadUserSettings(); // Reload settings in case they changed
       await updateExchangeRate();
+      // Load imported transactions for this month (fire-and-forget — non-blocking)
+      loadImportedTransactions().catch(err => console.error('Failed to load imported transactions:', err));
     } catch (error) {
       console.error('Error loading month:', error);
     }
   }
 
+  // ─── Imported Transactions ────────────────────────────────────────────────
+
+  let importedTxCategories: { id: string; name: string }[] = [];
+  let importedTxExpanded = false;
+
+  async function loadImportedTransactions() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Reset collapsed state when month changes
+    importedTxExpanded = false;
+    const tableEl = document.getElementById('importedTxTable');
+    const toggleBtn = document.getElementById('importedTxToggleBtn');
+    if (tableEl) tableEl.style.display = 'none';
+    if (toggleBtn) toggleBtn.textContent = 'View Transactions';
+
+    const { data: rows, error } = await supabase
+      .from('transactions')
+      .select('id, date, description, amount, category_id, manually_edited')
+      .eq('user_id', user.id)
+      .eq('month', currentMonth)
+      .order('date', { ascending: true });
+
+    const section = document.getElementById('importedTxSection');
+    if (!section) return;
+
+    if (error || !rows || rows.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    // Load categories if not yet cached
+    if (importedTxCategories.length === 0) {
+      const { data: cats } = await supabase
+        .from('categories')
+        .select('id, name')
+        .order('category_group', { ascending: true, nullsFirst: false })
+        .order('name', { ascending: true });
+      importedTxCategories = (cats || []).map(c => ({ id: c.id as string, name: c.name as string }));
+    }
+
+    renderImportedTxTable(rows as ImportedTx[]);
+    section.style.display = 'block';
+  }
+
+  function renderImportedTxTable(rows: ImportedTx[]) {
+    const tbody = document.getElementById('importedTxBody');
+    if (!tbody) return;
+
+    const sym = getCurrencySymbol(userCurrency);
+
+    const catOptions = importedTxCategories
+      .map(c => `<option value="${escImportedAttr(c.id)}">${escImportedHtml(c.name)}</option>`)
+      .join('');
+
+    tbody.innerHTML = rows.map(tx => {
+      const amtAbs = Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const amtStr = `${tx.amount < 0 ? '-' : ''}${sym}${amtAbs}`;
+      const amtColor = tx.amount < 0 ? 'var(--red)' : 'var(--accent)';
+      const editedIndicator = tx.manually_edited
+        ? '<span title="Manually edited — protected from re-imports" style="color:var(--accent2);margin-left:6px;font-size:10px;">✎</span>'
+        : '';
+
+      return `
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 7px 12px; color: var(--text-dim); font-size: 11px; white-space: nowrap;">${escImportedHtml(tx.date || '—')}</td>
+          <td style="padding: 7px 12px; color: var(--text); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escImportedAttr(tx.description || '')}">${escImportedHtml(tx.description || '—')}${editedIndicator}</td>
+          <td style="padding: 7px 12px; text-align: right; font-weight: 500; white-space: nowrap; color: ${amtColor};">${amtStr}</td>
+          <td style="padding: 5px 12px; min-width: 150px;">
+            <select
+              class="balance-input"
+              style="width: 100%; font-size: 11px; padding: 4px 8px;"
+              onchange="onImportedTxCategoryChange('${escImportedAttr(tx.id)}', '${escImportedAttr(tx.category_id || '')}', this)"
+            >
+              <option value="">— Uncategorized —</option>
+              ${catOptions.replace(
+                `value="${escImportedAttr(tx.category_id || '')}"`,
+                `value="${escImportedAttr(tx.category_id || '')}" selected`
+              )}
+            </select>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function toggleImportedTx() {
+    importedTxExpanded = !importedTxExpanded;
+    const tableEl   = document.getElementById('importedTxTable');
+    const toggleBtn = document.getElementById('importedTxToggleBtn');
+    if (tableEl)   tableEl.style.display   = importedTxExpanded ? 'block' : 'none';
+    if (toggleBtn) toggleBtn.textContent   = importedTxExpanded ? 'Hide Transactions' : 'View Transactions';
+  }
+
+  async function onImportedTxCategoryChange(
+    txId: string,
+    oldCategoryId: string | null,
+    select: HTMLSelectElement
+  ) {
+    const newCategoryId = select.value || null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Disable select during save
+    select.disabled = true;
+
+    // Step 1: Update the transaction row with new category and mark as manually edited
+    const { error: updateErr } = await supabase
+      .from('transactions')
+      .update({ category_id: newCategoryId, manually_edited: true })
+      .eq('id', txId)
+      .eq('user_id', user.id);
+
+    if (updateErr) {
+      showToast('Error updating transaction: ' + updateErr.message, 'error');
+      select.disabled = false;
+      return;
+    }
+
+    // Step 2: Re-sum and upsert budgets for both old and new category_id
+    const categoryIds = [oldCategoryId, newCategoryId].filter(Boolean) as string[];
+
+    for (const catId of categoryIds) {
+      const { data: catRows, error: sumErr } = await supabase
+        .from('transactions')
+        .select('amount')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth)
+        .eq('category_id', catId);
+
+      if (sumErr) continue;
+
+      const total = (catRows || []).reduce((s, r) => s + parseFloat(r.amount), 0);
+
+      await supabase.from('budgets').upsert(
+        {
+          category_id:   catId,
+          month:         currentMonth,
+          actual_amount: Math.abs(total),
+          user_id:       user.id,
+        },
+        { onConflict: 'category_id,month,user_id' }
+      );
+    }
+
+    select.disabled = false;
+
+    // Refresh the budget table to reflect the updated actuals
+    await loadMonth();
+  }
+
+  function escImportedHtml(s: string): string {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function escImportedAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
   function buildZAR() {
     const tbody = document.getElementById('zarBody');
@@ -1350,6 +1543,8 @@ import { supabase } from '../lib/supabase';
   window.handleSignOut = handleSignOut;
   window.changeMonth = changeMonth;
   window.toggleTheme = toggleTheme;
+  window.toggleImportedTx = toggleImportedTx;
+  window.onImportedTxCategoryChange = onImportedTxCategoryChange;
 
   // Initialize on load
   if (document.readyState === 'loading') {

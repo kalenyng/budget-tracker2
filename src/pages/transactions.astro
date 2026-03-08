@@ -1053,7 +1053,7 @@
     if (modal) modal.style.display = 'none';
   }
 
-  /** Upsert summed actuals per category into the budgets table. */
+  /** Upsert individual transactions then re-sum actuals into the budgets table. */
   async function confirmCommit() {
     const input = document.getElementById('commitMonthInput') as HTMLInputElement | null;
     const selectedMonth = input?.value;
@@ -1068,36 +1068,100 @@
       return;
     }
 
-    // Group transactions by expense category_id only
+    const monthDate = `${selectedMonth}-01`;
     const expenseCategoryIds = new Set(categories.map(c => c.id));
-    const grouped: Record<string, number> = {};
 
-    transactions.forEach(tx => {
-      if (!tx.category_id) return;
-      if (!expenseCategoryIds.has(tx.category_id)) return;
-      grouped[tx.category_id] = (grouped[tx.category_id] || 0) + tx.amount;
-    });
+    // Only commit transactions that have an expense category_id
+    const toCommit = transactions.filter(
+      tx => tx.category_id && expenseCategoryIds.has(tx.category_id)
+    );
 
-    const entries = Object.entries(grouped);
-    if (entries.length === 0) {
+    if (toCommit.length === 0) {
       showToast('No expense categories to commit.', 'error');
       return;
     }
 
-    const upsertRows = entries.map(([catId, total]) => ({
+    // Step 1: Fetch existing rows that the user has manually edited — protect them
+    const { data: manualRows, error: fetchErr } = await supabase
+      .from('transactions')
+      .select('date, description, amount')
+      .eq('user_id', user.id)
+      .eq('month', monthDate)
+      .eq('manually_edited', true);
+
+    if (fetchErr) {
+      showToast('Error checking existing transactions: ' + fetchErr.message, 'error');
+      return;
+    }
+
+    // Build a Set of natural keys for manually-edited rows
+    const protectedKeys = new Set(
+      (manualRows || []).map(r => `${r.date}||${r.description}||${r.amount}`)
+    );
+
+    // Step 2: Filter out any incoming transaction that matches a protected natural key
+    const upsertPayload = toCommit
+      .filter(tx => !protectedKeys.has(`${tx.date}||${tx.description}||${tx.amount}`))
+      .map(tx => ({
+        user_id:     user.id,
+        month:       monthDate,
+        date:        tx.date,
+        description: tx.description,
+        amount:      tx.amount,
+        category_id: tx.category_id,
+        manually_edited: false,
+      }));
+
+    // Step 3: Upsert on natural key — updates category_id on re-import
+    if (upsertPayload.length > 0) {
+      const { error: upsertErr } = await supabase
+        .from('transactions')
+        .upsert(upsertPayload, {
+          onConflict: 'user_id,month,date,description,amount',
+          ignoreDuplicates: false,
+        });
+
+      if (upsertErr) {
+        showToast('Error saving transactions: ' + upsertErr.message, 'error');
+        return;
+      }
+    }
+
+    // Step 4: Re-sum all rows for this user+month (including manually-edited ones) and upsert budgets
+    const { data: allRows, error: allErr } = await supabase
+      .from('transactions')
+      .select('category_id, amount')
+      .eq('user_id', user.id)
+      .eq('month', monthDate)
+      .not('category_id', 'is', null);
+
+    if (allErr) {
+      showToast('Error reading transaction totals: ' + allErr.message, 'error');
+      return;
+    }
+
+    const grouped: Record<string, number> = {};
+    (allRows || []).forEach(row => {
+      if (!row.category_id || !expenseCategoryIds.has(row.category_id)) return;
+      grouped[row.category_id] = (grouped[row.category_id] || 0) + parseFloat(row.amount);
+    });
+
+    const budgetRows = Object.entries(grouped).map(([catId, total]) => ({
       category_id:   catId,
-      month:         `${selectedMonth}-01`,
+      month:         monthDate,
       actual_amount: Math.abs(total),
       user_id:       user.id,
     }));
 
-    const { error } = await supabase
-      .from('budgets')
-      .upsert(upsertRows, { onConflict: 'category_id,month,user_id' });
+    if (budgetRows.length > 0) {
+      const { error: budgetErr } = await supabase
+        .from('budgets')
+        .upsert(budgetRows, { onConflict: 'category_id,month,user_id' });
 
-    if (error) {
-      showToast('Error committing actuals: ' + error.message, 'error');
-      return;
+      if (budgetErr) {
+        showToast('Error committing actuals: ' + budgetErr.message, 'error');
+        return;
+      }
     }
 
     // Format month name for toast: e.g. "March 2026"
@@ -1179,9 +1243,6 @@
 
 <style is:global>
   /* ── Page overrides ─────────────────────────────────────────────────────── */
-
-  /* Full-width — no max-width cap so all category columns are visible */
-  #mainPage.page { max-width: none; }
 
   h1 {
     font-family: 'Fraunces', serif;

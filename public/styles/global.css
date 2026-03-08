@@ -51,12 +51,13 @@ html, body {
 }
 
 body {
-  padding: 40px 20px;
+  padding: 40px 0;
 }
 
 /* Layout */
 .page {
-  max-width: 900px;
+  width: 80%;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
