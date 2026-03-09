@@ -1,6 +1,7 @@
 ---
 // Mobile Transaction Sorter
 // Screen 1: CSV Upload → Screen 2: Card Sorter → Screen 3: Results
+import MobileNav from '../components/MobileNav.astro';
 ---
 
 <!DOCTYPE html>
@@ -10,6 +11,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Quick Sort · Budget Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles/global.css">
+  <link rel="stylesheet" href="/styles/mobile.css" />
   <!-- Apply saved theme before first paint to avoid flash of wrong theme -->
   <script>
     (function () {
@@ -23,11 +26,6 @@
 <!-- ── Screen 1: Upload ──────────────────────────────────────────────────── -->
 <div id="uploadScreen" class="screen">
   <div class="screen-inner">
-
-    <div class="upload-header">
-      <a href="/transactions" class="back-link">← Desktop View</a>
-      <div class="logo-label">QUICK SORT</div>
-    </div>
 
     <div class="upload-hero">
       <h1>Quick<br><span>Sort</span></h1>
@@ -184,9 +182,6 @@
   </div>
 </div>
 
-<!-- ── Theme toggle ───────────────────────────────────────────────────────── -->
-<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">☀ Light</button>
-
 <script>
   import { supabase }                                        from '../lib/supabase';
   import { getCurrentUser, onAuthStateChange }               from '../lib/auth';
@@ -207,9 +202,8 @@
     applyTheme(next);
   }
 
-  // Apply immediately (the inline head script sets data-theme, this syncs the button label)
+  // Apply immediately (the inline head script sets data-theme)
   applyTheme(localStorage.getItem('theme') || 'dark');
-  document.getElementById('themeToggle')!.addEventListener('click', toggleTheme);
 
   // ── Types ────────────────────────────────────────────────────────────────
 
@@ -243,6 +237,137 @@
   // CSV state
   let csvHeaders: string[]                 = [];
   let csvRows: Record<string, string>[]    = [];
+
+  // ── Save/Load Progress ───────────────────────────────────────────────────────
+
+  function getProgressKey(userId: string): string {
+    return `mobile_sort_progress_${userId}`;
+  }
+
+  interface SortProgress {
+    transactions: ParsedTx[];
+    currentIndex: number;
+    historyStack: { index: number; category: string | null; note: string }[];
+    csvHeaders: string[];
+    csvRows: Record<string, string>[];
+    timestamp: number;
+    userId: string; // Store user ID to prevent cross-account contamination
+  }
+
+  async function saveProgress() {
+    // Only save if we're actually in the sorting process
+    if (transactions.length === 0 || currentIndex >= transactions.length) {
+      const user = await getCurrentUser();
+      if (user) {
+        localStorage.removeItem(getProgressKey(user.id));
+      }
+      return;
+    }
+
+    const user = await getCurrentUser();
+    if (!user) return; // Can't save without a user
+
+    const progress: SortProgress = {
+      transactions,
+      currentIndex,
+      historyStack,
+      csvHeaders,
+      csvRows,
+      timestamp: Date.now(),
+      userId: user.id,
+    };
+
+    try {
+      localStorage.setItem(getProgressKey(user.id), JSON.stringify(progress));
+    } catch (err) {
+      console.error('Failed to save progress:', err);
+    }
+  }
+
+  async function loadProgress(): Promise<SortProgress | null> {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return null;
+
+      const saved = localStorage.getItem(getProgressKey(user.id));
+      if (!saved) return null;
+
+      const progress: SortProgress = JSON.parse(saved);
+      
+      // Verify this progress belongs to the current user
+      if (progress.userId !== user.id) {
+        // Clear progress from wrong user
+        localStorage.removeItem(getProgressKey(user.id));
+        return null;
+      }
+      
+      // Check if progress is too old (e.g., older than 7 days)
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      if (Date.now() - progress.timestamp > sevenDays) {
+        localStorage.removeItem(getProgressKey(user.id));
+        return null;
+      }
+
+      return progress;
+    } catch (err) {
+      console.error('Failed to load progress:', err);
+      const user = await getCurrentUser();
+      if (user) {
+        localStorage.removeItem(getProgressKey(user.id));
+      }
+      return null;
+    }
+  }
+
+  async function clearProgress() {
+    const user = await getCurrentUser();
+    if (user) {
+      localStorage.removeItem(getProgressKey(user.id));
+    }
+    // Also clear any old progress keys that don't have user ID (migration)
+    localStorage.removeItem('mobile_sort_progress');
+  }
+
+  async function restoreProgress(progress: SortProgress) {
+    // Safety check: verify this progress belongs to the current user
+    const user = await getCurrentUser();
+    if (!user || progress.userId !== user.id) {
+      console.warn('Progress does not belong to current user, clearing it');
+      await clearProgress();
+      return;
+    }
+
+    transactions = progress.transactions;
+    currentIndex = progress.currentIndex;
+    historyStack = progress.historyStack;
+    csvHeaders = progress.csvHeaders;
+    csvRows = progress.csvRows;
+
+    // Update UI to show we're resuming
+    document.getElementById('dropZoneIdle')!.style.display = 'none';
+    const done = document.getElementById('dropZoneDone')!;
+    done.style.display = 'flex';
+    document.getElementById('doneFileName')!.textContent = 'Resuming previous session';
+    document.getElementById('doneRowCount')!.textContent = `${transactions.length} transactions`;
+
+    // Populate mapping dropdowns
+    populateMappingDropdowns();
+    document.getElementById('mappingSection')!.style.display = 'block';
+    document.getElementById('startBtn')!.style.display = 'block';
+
+    // Show sorter screen and restore position
+    buildCategoryGrid();
+    showScreen('sorterScreen');
+    renderCard('forward', true);
+    updateProgress();
+
+    // Show a brief notification
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--accent-fg);font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.06em;padding:10px 18px;border-radius:8px;z-index:9999;pointer-events:none;';
+    banner.textContent = `Resumed from transaction ${currentIndex + 1} of ${transactions.length}`;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 3000);
+  }
 
   // ── Keyword → Category map ────────────────────────────────────────────────
 
@@ -482,7 +607,7 @@
 
   // ── Start sorting ─────────────────────────────────────────────────────────
 
-  function startSorting() {
+  async function startSorting() {
     hideError();
     const dateCol   = (document.getElementById('dateColSelect')   as HTMLSelectElement).value;
     const descCol   = (document.getElementById('descColSelect')   as HTMLSelectElement).value;
@@ -529,6 +654,9 @@
     showScreen('sorterScreen');
     renderCard('forward', true);
     updateProgress();
+    
+    // Save initial progress
+    await saveProgress();
   }
 
   // ── Screen management ─────────────────────────────────────────────────────
@@ -563,19 +691,66 @@
   }
 
   function syncCategoryGrid() {
-    const tx = transactions[currentIndex];
-    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
-      const name = btn.dataset.cat!;
-      btn.classList.remove('cat-suggested', 'cat-selected', 'cat-dimmed');
+    if (currentIndex >= transactions.length) {
+      // Clear everything if we're past the end
+      document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+        btn.classList.remove('cat-suggested', 'cat-selected', 'cat-dimmed');
+        btn.disabled = false;
+        btn.blur();
+      });
+      return;
+    }
+    
+    // Get the current transaction - use a fresh reference
+    const txIndex = currentIndex;
+    const tx = transactions[txIndex];
+    if (!tx) {
+      // If no transaction, clear everything
+      document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+        btn.classList.remove('cat-suggested', 'cat-selected', 'cat-dimmed');
+        btn.disabled = false;
+        btn.blur();
+      });
+      return;
+    }
+    
+    // First, aggressively clear ALL state from all buttons synchronously
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.cat-btn'));
+    
+    // Clear all state classes explicitly - use className to be more forceful
+    buttons.forEach(btn => {
+      // Get base classes (cat-btn, skip-btn if applicable)
+      const baseClasses = btn.classList.contains('skip-btn') ? 'cat-btn skip-btn' : 'cat-btn';
+      btn.className = baseClasses;
       btn.disabled = false;
+      btn.blur();
+    });
+    
+    // Force a reflow to ensure classes are removed
+    if (buttons.length > 0) {
+      void buttons[0].offsetHeight;
+    }
+    
+    // Now apply state ONLY for the current transaction
+    // Re-fetch the transaction to ensure we have the latest state
+    const currentTx = transactions[txIndex];
+    if (!currentTx) return;
+    
+    const txCategory = currentTx.category;
+    const txSuggested = currentTx.suggested;
+    
+    buttons.forEach(btn => {
+      const name = btn.dataset.cat!;
       if (name === '') return; // SKIP button — no state decoration
-      // If this transaction already has a stored category, show it as selected
-      if (tx?.category && name === tx.category) {
+      
+      // Only show selected if THIS transaction has this exact category
+      if (txCategory && txCategory === name) {
         btn.classList.add('cat-selected');
-      } else if (!tx?.category && tx?.suggested === name) {
+      } else if (!txCategory && txSuggested === name) {
         // No selection yet — show suggestion glow
         btn.classList.add('cat-suggested');
       }
+      // Otherwise, button remains in default state (no classes)
     });
   }
 
@@ -666,9 +841,10 @@
 
     const cat = categories.find(c => c.name === catName);
 
-    // Drop focus from the button only — never blur noteInput (that would dismiss the keyboard mid-animation)
-    const active = document.activeElement as HTMLElement;
-    if (active?.classList.contains('cat-btn')) active.blur();
+    // Drop focus from all category buttons — never blur noteInput (that would dismiss the keyboard mid-animation)
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      btn.blur();
+    });
 
     // Immediate visual feedback — selected button lights up, others dim
     document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
@@ -691,17 +867,22 @@
       // All done — slide card out then show completion
       await slideCardOut('forward');
       showCompletionCard();
+      clearProgress(); // Clear when done
     } else {
       await slideCardOut('forward');
       currentIndex++;
       selectedCat = null;
-      // Clear dimmed/disabled state before rendering new card
+      // Aggressively clear ALL state before rendering new card
       document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
-        btn.classList.remove('cat-selected', 'cat-dimmed');
+        btn.classList.remove('cat-suggested', 'cat-selected', 'cat-dimmed');
         btn.disabled = false;
+        btn.blur(); // Remove focus outline
       });
+      // Force a reflow to ensure state is cleared
+      void document.querySelector('.category-grid')?.offsetHeight;
       renderCard('forward');
       updateProgress();
+      await saveProgress(); // Save after each categorization
     }
 
     animating = false;
@@ -713,9 +894,10 @@
     if (animating || selectedCat) return;
     animating = true;
 
-    // Drop focus from the button only — never blur noteInput
-    const active = document.activeElement as HTMLElement;
-    if (active?.classList.contains('cat-btn')) active.blur();
+    // Drop focus from all category buttons — never blur noteInput
+    document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
+      btn.blur();
+    });
 
     // Dim all buttons briefly to acknowledge the tap
     document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
@@ -733,6 +915,7 @@
     if (currentIndex >= transactions.length - 1) {
       await slideCardOut('forward');
       showCompletionCard();
+      clearProgress();
     } else {
       await slideCardOut('forward');
       currentIndex++;
@@ -740,9 +923,11 @@
       document.querySelectorAll<HTMLButtonElement>('.cat-btn').forEach(btn => {
         btn.classList.remove('cat-dimmed');
         btn.disabled = false;
+        btn.blur(); // Remove focus outline
       });
       renderCard('forward');
       updateProgress();
+      await saveProgress(); // Save after skip
     }
 
     animating = false;
@@ -1031,6 +1216,9 @@
 
       closeCommitModal();
 
+      closeCommitModal();
+      clearProgress(); // Clear saved progress after committing
+
       const [yr, mo] = selectedMonth.split('-');
       const monthName = new Date(parseInt(yr), parseInt(mo) - 1, 1)
         .toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -1064,6 +1252,8 @@
     selectedCat  = null;
     currentIndex = 0;
     animating    = false;
+
+    clearProgress(); // Clear saved progress
 
     (document.getElementById('csvFileInput') as HTMLInputElement).value = '';
     document.getElementById('dropZoneIdle')!.style.display  = '';
@@ -1112,6 +1302,19 @@
 
     const ok = await checkAuth();
     if (!ok) return;
+
+    // Clear any old-format progress (migration cleanup)
+    localStorage.removeItem('mobile_sort_progress');
+
+    // Check for saved progress on load
+    const savedProgress = await loadProgress();
+    if (savedProgress && savedProgress.transactions.length > 0) {
+      await Promise.all([loadCategories(), loadCurrency()]);
+      await restoreProgress(savedProgress);
+      // Set up event listeners for saving progress
+      setupProgressSaving();
+      return; // Don't continue with normal init
+    }
 
     await Promise.all([loadCategories(), loadCurrency()]);
 
@@ -1164,6 +1367,58 @@
     });
 
     initSwipe();
+    setupProgressSaving();
+  }
+
+  function setupProgressSaving() {
+    // Save progress when navigating away
+    window.addEventListener('beforeunload', () => {
+      if (transactions.length > 0 && currentIndex < transactions.length) {
+        saveProgress(); // async but that's okay for beforeunload
+      }
+    });
+
+    // Save progress when page becomes hidden (mobile app switching)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && transactions.length > 0 && currentIndex < transactions.length) {
+        saveProgress(); // async but that's okay for visibilitychange
+      }
+    });
+
+    // Auto-save every 30 seconds while sorting
+    setInterval(() => {
+      if (transactions.length > 0 && currentIndex < transactions.length) {
+        saveProgress(); // async but that's okay for interval
+      }
+    }, 30000);
+
+    // Clear progress when user changes (auth state change)
+    onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        // User signed out - clear all progress
+        clearProgress();
+      } else {
+        // User changed - clear any progress that doesn't belong to this user
+        const currentUserId = session.user.id;
+        // Clear old format progress
+        localStorage.removeItem('mobile_sort_progress');
+        // Clear any progress keys that don't match current user
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('mobile_sort_progress_') && key !== getProgressKey(currentUserId)) {
+            try {
+              const progress = JSON.parse(localStorage.getItem(key) || '{}');
+              if (progress.userId && progress.userId !== currentUserId) {
+                localStorage.removeItem(key);
+              }
+            } catch {
+              // If we can't parse it, remove it anyway
+              localStorage.removeItem(key);
+            }
+          }
+        }
+      }
+    });
   }
 
   if (document.readyState === 'loading') {
@@ -1818,30 +2073,6 @@
   .commit-confirm-btn:disabled { opacity: 0.5; cursor: default; }
 
   /* ══════════════════════════════════════════════════════════════════════════
-     THEME TOGGLE
-     ══════════════════════════════════════════════════════════════════════ */
-  .theme-toggle {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 9999;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    padding: 8px 12px;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: border-color 0.15s, color 0.15s;
-    letter-spacing: 0.05em;
-  }
-  .theme-toggle:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  /* ══════════════════════════════════════════════════════════════════════════
      ANIMATIONS
      Card slides are driven by inline CSS transitions (see slideCardOut/In).
      Category grid uses keyframe animations for a subtle cross-axis feel.
@@ -1858,6 +2089,8 @@
   .cats-enter-forward  { animation: catsEnterForward  0.28s cubic-bezier(0.22,1,0.36,1) both; }
   .cats-enter-backward { animation: catsEnterBackward 0.28s cubic-bezier(0.22,1,0.36,1) both; }
 </style>
+
+<MobileNav activePage="sort" />
 
 </body>
 </html>

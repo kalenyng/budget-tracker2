@@ -1,40 +1,42 @@
 ---
 // Settings page
 import { supabase } from '../lib/supabase';
+import MobileNav from '../components/MobileNav.astro';
 ---
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Settings - Budget Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles/global.css">
+  <link rel="stylesheet" href="/styles/mobile.css" />
+  <script>
+    (function () {
+      const t = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
+
 <div class="page">
 
-  <header>
-    <div class="label">Settings</div>
-    <h1>Budget<span> Settings</span></h1>
-    <div class="subtitle">Manage categories and preferences</div>
-    
-    <!-- Navigation -->
-    <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-      <a href="/" class="currency-btn" style="text-decoration: none; display: inline-block;">← Back to Overview</a>
-      <div id="currentUserEmail" style="margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Signed in user">Loading account...</div>
-      <button class="currency-btn" onclick="handleSignOut()" style="color: var(--red);" title="Sign Out">Sign Out</button>
-    </div>
-  </header>
+  <!-- Header -->
+  <div class="mobile-header">
+    <span style="font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--text-dim);">SETTINGS</span>
+    <a href="#" onclick="handleSignOut(); return false;" class="signout-link">Sign out</a>
+  </div>
 
   <!-- Currency Settings -->
-  <div class="balance-section">
-    <div class="label">Currency Settings</div>
+  <div class="mobile-card">
+    <div class="mobile-section-label">Currency Settings</div>
     <div style="margin-top: 16px;">
       <div style="margin-bottom: 24px;">
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 8px;">Preferred Currency</label>
-        <select id="preferredCurrency" class="balance-input" style="width: 200px;">
+        <select id="preferredCurrency" class="balance-input" style="width: 100%; max-width: 300px;">
           <option value="ZAR">ZAR – South African Rand</option>
           <option value="USD">USD – US Dollar</option>
           <option value="GBP">GBP – British Pound</option>
@@ -50,7 +52,7 @@ import { supabase } from '../lib/supabase';
         </label>
         <div id="conversionSettings" style="margin-top: 12px; margin-left: 24px; opacity: 0.5;">
           <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 8px;">Convert to</label>
-          <select id="conversionCurrency" class="balance-input" style="width: 200px;">
+          <select id="conversionCurrency" class="balance-input" style="width: 100%; max-width: 300px;">
             <option value="GBP">GBP (British Pound)</option>
             <option value="USD">USD (US Dollar)</option>
             <option value="EUR">EUR (Euro)</option>
@@ -59,35 +61,33 @@ import { supabase } from '../lib/supabase';
         </div>
       </div>
       
-      <button class="currency-btn" onclick="saveCurrencySettings()" style="margin-top: 8px;">Save Currency Settings</button>
+      <button class="mobile-btn-primary" onclick="saveCurrencySettings()" style="margin-top: 8px;">Save Currency Settings</button>
+    </div>
+  </div>
+
+  <!-- Theme -->
+  <div class="mobile-card">
+    <div class="mobile-section-label">Theme</div>
+    <div style="margin-top: 16px;">
+      <button class="mobile-btn-secondary" onclick="toggleTheme()" id="themeToggle" style="width: 100%;">☀ Light</button>
     </div>
   </div>
 
   <!-- Category Management -->
-  <div class="balance-section">
-    <div class="label">Category Management</div>
+  <div class="mobile-card">
+    <div class="mobile-section-label">Category Management</div>
     <div style="margin-top: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <div style="color: var(--text-dim); font-size: 11px;">Manage your budget categories</div>
-        <button class="currency-btn" onclick="addNewCategory()" style="font-size: 11px; padding: 6px 12px;">+ Add Category</button>
-      </div>
+      <button class="mobile-btn-primary" onclick="addNewCategory()" style="margin-bottom: 16px;">+ Add Category</button>
       
-      <div id="categoriesList" style="display: flex; flex-direction: column; gap: 8px;">
+      <div id="categoriesList" style="display: flex; flex-direction: column; gap: 12px;">
         <!-- Categories will be loaded here -->
       </div>
     </div>
   </div>
 
-  <footer>
-    Budget Tracker · Settings
-    <div style="margin-top: 12px;">
-      <a href="/mobile-sort" style="display: inline-block; background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; padding: 8px 18px; border-radius: 4px; text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--accent)';this.style.color='#0d0f0e'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--accent)'">⌖ Quick Sort</a>
-    </div>
-  </footer>
-
 </div>
 
-<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">☀ Light</button>
+<MobileNav activePage="settings" />
 
 <script>
   import { supabase } from '../lib/supabase';
@@ -255,38 +255,36 @@ import { supabase } from '../lib/supabase';
     categories.forEach(cat => {
       const div = document.createElement('div');
       div.className = 'category-item';
-      div.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;';
       
       div.innerHTML = `
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
           <input type="text" 
                  value="${escapeHtml(cat.name)}" 
                  data-id="${cat.id}"
                  class="category-name-input"
-                 style="background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 10px; border-radius: 4px; width: 100%;"
-                 onchange="updateCategoryName('${cat.id}', this.value)">
-          <div style="display: flex; gap: 12px; align-items: center; font-size: 10px; color: var(--text-dim);">
+                 onchange="updateCategoryName('${cat.id}', this.value)"
+                 placeholder="Category name">
+          <div style="display: flex; gap: 12px; align-items: center; font-size: 10px; color: var(--text-dim); flex-wrap: wrap;">
             <span>Type: ${cat.type || 'variable'}</span>
             ${cat.category_group ? `<span>Group: ${escapeHtml(cat.category_group)}</span>` : ''}
           </div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 2px; align-items: flex-end; flex-shrink: 0;">
-          <label style="color: var(--text-dim); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Monthly Budget (default)</label>
+        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+          <label style="color: var(--text-dim); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;">Monthly Budget</label>
           <div style="display: flex; align-items: center; gap: 4px;">
             <span style="color: var(--muted); font-size: 11px;">${currencySymbol}</span>
             <input type="number"
                    value="${parseFloat(cat.monthly_amount || 0)}"
                    class="category-default-input"
-                   style="background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 10px; border-radius: 4px; width: 100px; text-align: right;"
                    onchange="updateCategoryDefault('${cat.id}', this.value)"
                    onblur="updateCategoryDefault('${cat.id}', this.value)"
-                   placeholder="0">
+                   placeholder="0"
+                   style="flex: 1;">
           </div>
         </div>
         <button onclick="deleteCategory('${cat.id}')" 
-                style="background: var(--red); border: 1px solid var(--red); color: white; font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 12px; cursor: pointer; border-radius: 4px; transition: all 0.15s; flex-shrink: 0;"
-                onmouseover="this.style.opacity='0.8'"
-                onmouseout="this.style.opacity='1'">Delete</button>
+                class="mobile-btn-secondary"
+                style="background: var(--red); border-color: var(--red); color: white; margin-top: 4px;">Delete</button>
       `;
       
       container.appendChild(div);
@@ -472,6 +470,7 @@ import { supabase } from '../lib/supabase';
     return div.innerHTML;
   }
 
+
   // Make functions available globally
   function setupConversionToggle() {
     const checkbox = document.getElementById('showConversion');
@@ -499,40 +498,77 @@ import { supabase } from '../lib/supabase';
 <style is:global>
   /* Page-specific styles for settings.astro */
 
-  h1 {
-    font-family: 'Fraunces', serif;
-    font-size: clamp(36px, 6vw, 64px);
-    font-weight: 700;
-    line-height: 1;
+  .balance-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     color: var(--text);
-    letter-spacing: -0.02em;
-  }
-
-  h1 span {
-    color: var(--accent);
-  }
-
-  select.balance-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
     cursor: pointer;
+  }
+  
+  .balance-input:focus {
+    border-color: var(--accent);
   }
 
   .category-item {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
     transition: all 0.15s;
   }
 
   .category-item:hover {
-    border-color: var(--accent) !important;
-  }
-
-  .category-name-input:focus {
-    outline: none;
     border-color: var(--accent);
   }
 
+  @media (min-width: 768px) {
+    .category-item {
+      flex-direction: row;
+      align-items: center;
+    }
+  }
+
+  .category-name-input,
+  .category-default-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    width: 100%;
+  }
+
+  .category-name-input:focus,
   .category-default-input:focus {
     outline: none;
     border-color: var(--accent);
   }
+
+  .signout-link {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .signout-link:hover { color: var(--red); }
 
   input[type="checkbox"] {
     appearance: none;

@@ -1,6 +1,9 @@
 ---
 // Main budget app page
 import { supabase } from '../lib/supabase';
+
+// Prevent pre-rendering so middleware can redirect
+export const prerender = false;
 ---
 
 <!DOCTYPE html>
@@ -11,6 +14,12 @@ import { supabase } from '../lib/supabase';
   <title>Budget Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles/global.css">
+  <script>
+    (function () {
+      const t = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
 <div class="page">
@@ -214,6 +223,7 @@ import { supabase } from '../lib/supabase';
   // Apply saved theme immediately on load
   const savedTheme = localStorage.getItem('theme') || 'dark';
   applyTheme(savedTheme);
+
 
   // Check authentication on page load
   async function checkAuth() {

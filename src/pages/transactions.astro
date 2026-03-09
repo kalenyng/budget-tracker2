@@ -261,6 +261,33 @@
 
   applyTheme(localStorage.getItem('theme') || 'dark');
 
+  function isMobileDevice() {
+    return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
+  }
+
+  // Redirect to mobile-dashboard if display_mode requires it
+  async function applyDisplayModeRedirect(): Promise<boolean> {
+    let mode = localStorage.getItem('display_mode');
+    if (!mode) {
+      const user = await getCurrentUser();
+      if (user) {
+        const { data } = await supabase
+          .from('user_settings')
+          .select('value')
+          .eq('user_id', user.id)
+          .eq('key', 'display_mode')
+          .single();
+        mode = data?.value || 'auto';
+        localStorage.setItem('display_mode', mode);
+      }
+    }
+    if (mode === 'mobile' || (mode === 'auto' && isMobileDevice())) {
+      window.location.href = '/mobile-dashboard';
+      return true;
+    }
+    return false;
+  }
+
   // ─── Auth ─────────────────────────────────────────────────────────────────
 
   async function checkAuth() {
@@ -1188,6 +1215,10 @@
       // Check auth before loading any data
       const isAuthenticated = await checkAuth();
       if (!isAuthenticated) return;
+
+      // Redirect to mobile view if display_mode requires it
+      const redirected = await applyDisplayModeRedirect();
+      if (redirected) return;
 
       // Load user preferred currency
       const user = await getCurrentUser();

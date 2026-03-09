@@ -1,0 +1,423 @@
+---
+// Mobile Dashboard
+import MobileNav from '../components/MobileNav.astro';
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dashboard · Budget Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles/global.css">
+  <link rel="stylesheet" href="/styles/mobile.css" />
+  <!-- Apply saved theme before first paint — no flash -->
+  <script>
+    (function () {
+      const t = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ① Header bar -->
+  <div class="mobile-header">
+    <span style="font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--text-dim);">DASHBOARD</span>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <span class="db-month-chip" id="dbMonthLabel"></span>
+      <a href="#" onclick="handleSignOut(); return false;" class="signout-link">Sign out</a>
+    </div>
+  </div>
+
+  <!-- ② Days left banner -->
+  <div class="mobile-card" id="dbDaysBanner" style="padding: 13px 20px; border-radius: 999px; border: 1px solid transparent; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; text-align: center; letter-spacing: 0.04em;"></div>
+
+  <!-- ③ Upload prompt (shown only when no transactions for current month) -->
+  <div class="mobile-card" id="dbUploadPrompt" style="display:none; flex-direction: column; gap: 12px; border-color: var(--accent2); background: rgba(245,200,66,0.08);">
+    <div id="dbUploadText" style="font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent2);"></div>
+    <a href="/mobile-sort" class="mobile-btn-primary" style="margin-bottom: 0;">⬆ Import CSV</a>
+  </div>
+
+  <!-- ④ Budget this month -->
+  <div class="mobile-card">
+    <div class="mobile-section-label">This month's budget</div>
+    <div id="dbCatList"></div>
+  </div>
+
+  <!-- ⑤ Monthly calendar -->
+  <div class="mobile-card">
+    <div class="mobile-section-label">Months</div>
+    <div class="db-cal-grid" id="dbCalGrid"></div>
+  </div>
+
+  <!-- ⑥ Quick actions -->
+  <a href="/mobile-sort" class="mobile-btn-primary">⚡ Quick Sort</a>
+
+</div>
+
+<MobileNav activePage="home" />
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
+  import { formatCurrency } from '../lib/currency';
+  import type { CurrencyCode } from '../lib/currency';
+
+  let userCurrency: CurrencyCode = 'ZAR';
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  // Theme is managed in settings page
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function isMobileDevice() {
+    return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
+  }
+
+  function escapeHtml(text: string) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    window.location.href = '/auth';
+  }
+
+  function goToMonth(ym: string) {
+    window.location.href = `/mobile-dashboard?month=${ym}`;
+  }
+
+  // ── Render: days left banner ──────────────────────────────────────────────
+  function renderDaysBanner(now: Date) {
+    const el = document.getElementById('dbDaysBanner');
+    if (!el) return;
+
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysLeft = lastDay - now.getDate() + 1;
+    const monthName = now.toLocaleString('default', { month: 'long' });
+
+    let color: string, bg: string;
+    if (daysLeft > 15) {
+      color = 'var(--accent)';
+      bg = 'rgba(200,245,96,0.10)';
+    } else if (daysLeft >= 8) {
+      color = 'var(--accent2)';
+      bg = 'rgba(245,200,66,0.10)';
+    } else {
+      color = 'var(--red)';
+      bg = 'rgba(245,96,96,0.10)';
+    }
+
+    el.textContent = `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in ${monthName}`;
+    el.style.borderColor = color;
+    el.style.color = color;
+    el.style.background = bg;
+  }
+
+  // ── Render: upload prompt ─────────────────────────────────────────────────
+  function renderUploadPrompt(hasTransactions: boolean, monthName: string) {
+    const el = document.getElementById('dbUploadPrompt');
+    const textEl = document.getElementById('dbUploadText');
+    if (!el || !textEl) return;
+    if (hasTransactions) { el.style.display = 'none'; return; }
+    textEl.textContent = `No transactions imported for ${monthName}`;
+    el.style.display = 'flex';
+  }
+
+  // ── Render: skeleton for category list ─────────────────────────────────────
+  function renderCategorySkeleton() {
+    const container = document.getElementById('dbCatList');
+    if (!container) return;
+    // Match the actual structure: category row + progress bar
+    // Use more items (8) to match typical content height and prevent layout shift
+    container.innerHTML = Array(8).fill(0).map(() => `
+      <div style="padding-top:10px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
+          <div class="skeleton" style="width:60%;height:14px;flex:1;"></div>
+          <div class="skeleton" style="width:80px;height:12px;flex-shrink:0;"></div>
+        </div>
+        <div class="skeleton" style="width:100%;height:4px;margin-top:6px;border-radius:2px;"></div>
+      </div>
+    `).join('') + '<div style="padding:12px 0 0;margin-top:10px;border-top:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><div class="skeleton" style="width:60px;height:14px;"></div><div class="skeleton" style="width:120px;height:14px;"></div></div></div>';
+  }
+
+  // ── Render: category budget list ──────────────────────────────────────────
+  function renderCategories(categories: any[], budgetMap: Record<string, number>) {
+    const container = document.getElementById('dbCatList');
+    if (!container) return;
+
+    if (categories.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:16px 0;">No categories found.</div>';
+      return;
+    }
+
+    let html = '';
+    let currentGroup = Symbol(); // sentinel — won't match any string
+    let totalActual = 0;
+    let totalBudget = 0;
+
+    for (const cat of categories) {
+      const group: string = cat.category_group || 'Other';
+      const budget = parseFloat(cat.monthly_amount) || 0;
+      const actual = budgetMap[cat.id] ?? 0;
+      totalActual += actual;
+      totalBudget += budget;
+
+      if (group !== currentGroup) {
+        currentGroup = group;
+        html += `<div style="font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-top: 16px; margin-bottom: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--border);">${escapeHtml(group)}</div>`;
+      }
+
+      const isOver = budget > 0 && actual > budget;
+      const fillColor = isOver ? 'var(--red)' : 'var(--accent)';
+      const pct = budget > 0 ? Math.min((actual / budget) * 100, 100) : 0;
+      const amountText = budget > 0
+        ? `${formatCurrency(actual, userCurrency)} / ${formatCurrency(budget, userCurrency)}`
+        : formatCurrency(actual, userCurrency);
+
+      html += `
+        <div class="mobile-row">
+          <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(cat.name)}</span>
+          <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0;">${amountText}</span>
+        </div>
+        <div class="mobile-progress-track">
+          ${budget > 0 && actual > 0
+            ? `<div class="mobile-progress-fill" style="width:${pct.toFixed(1)}%;background:${fillColor};"></div>`
+            : ''}
+        </div>`;
+    }
+
+    html += `
+      <div class="mobile-row" style="padding: 12px 0 0; margin-top: 10px; border-top: 1px solid var(--border);">
+        <span style="font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.12em; color: var(--text);">TOTAL</span>
+        <span style="font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; color: var(--text);">${formatCurrency(totalActual, userCurrency)} / ${formatCurrency(totalBudget, userCurrency)}</span>
+      </div>`;
+
+    container.innerHTML = html;
+  }
+
+  // ── Render: skeleton for calendar ─────────────────────────────────────────
+  function renderCalendarSkeleton() {
+    const container = document.getElementById('dbCalGrid');
+    if (!container) return;
+    container.innerHTML = Array(12).fill(0).map(() => 
+      '<div class="skeleton" style="width:100%;height:36px;border-radius:4px;"></div>'
+    ).join('');
+  }
+
+  // ── Render: monthly calendar ──────────────────────────────────────────────
+  function renderCalendar(txMonthSet: Set<string>, currentYM: string) {
+    const container = document.getElementById('dbCalGrid');
+    if (!container) return;
+
+    const now = new Date();
+    const cells: string[] = [];
+
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleString('default', { month: 'short', year: '2-digit' }).toUpperCase();
+      const isCurrent  = ym === currentYM;
+      const isComplete = !isCurrent && txMonthSet.has(ym);
+      const cls = isCurrent ? 'current' : isComplete ? 'complete' : 'empty';
+      cells.push(`<button class="cal-month ${cls}" onclick="goToMonth('${ym}')">${label}</button>`);
+    }
+
+    container.innerHTML = cells.join('');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  async function init() {
+    onAuthStateChange((_event, session) => {
+      if (!session?.user) window.location.href = '/auth';
+    });
+
+    const user = await getCurrentUser();
+    if (!user) { window.location.href = '/auth'; return; }
+
+    // Display mode check
+    let mode = localStorage.getItem('display_mode');
+    if (!mode) {
+      const { data } = await supabase
+        .from('user_settings').select('value')
+        .eq('user_id', user.id).eq('key', 'display_mode').single();
+      mode = data?.value || 'auto';
+      localStorage.setItem('display_mode', mode);
+    }
+    if (mode === 'desktop' || (mode === 'auto' && !isMobileDevice())) {
+      window.location.href = '/';
+      return;
+    }
+
+    // Load all user settings at once
+    const { data: settingsRows } = await supabase
+      .from('user_settings').select('key, value').eq('user_id', user.id);
+    const sm = Object.fromEntries((settingsRows || []).map((s: any) => [s.key, s.value]));
+    userCurrency = (sm['preferred_currency'] as CurrencyCode) || 'ZAR';
+
+    // Check for selected month in URL param
+    const urlParams = new URLSearchParams(window.location.search);
+    const monthParam = urlParams.get('month');
+    
+    // Current month (always used for days left banner)
+    const now = new Date();
+    renderDaysBanner(now);
+
+    // Selected month (from URL param, or current month if none)
+    let selectedDate: Date;
+    let selectedMonthStart: string;
+    let selectedYM: string;
+    let selectedMonthName: string;
+    let selectedChipLabel: string;
+
+    if (monthParam) {
+      // Parse YYYY-MM format
+      const [year, month] = monthParam.split('-').map(Number);
+      selectedDate = new Date(year, month - 1, 1);
+      selectedMonthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      selectedYM = monthParam;
+    } else {
+      // Use current month
+      selectedDate = now;
+      selectedMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      selectedYM = selectedMonthStart.slice(0, 7);
+    }
+
+    selectedMonthName = selectedDate.toLocaleString('default', { month: 'long' });
+    selectedChipLabel = selectedDate.toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
+
+    // Update header month label
+    const monthLabelEl = document.getElementById('dbMonthLabel');
+    if (monthLabelEl) monthLabelEl.textContent = selectedChipLabel;
+
+    // Show skeletons immediately to prevent layout shift
+    renderCategorySkeleton();
+    renderCalendarSkeleton();
+    const uploadPromptEl = document.getElementById('dbUploadPrompt');
+    if (uploadPromptEl) uploadPromptEl.style.display = 'none';
+
+    // Parallel data fetch (using selected month)
+    const [budgetRes, categoryRes, txMonthRes] = await Promise.all([
+      supabase.from('budgets')
+        .select('category_id, actual_amount')
+        .eq('user_id', user.id)
+        .eq('month', selectedMonthStart),
+      supabase.from('categories')
+        .select('id, name, monthly_amount, category_group, type')
+        .eq('user_id', user.id)
+        .order('category_group', { ascending: true, nullsFirst: false })
+        .order('name', { ascending: true }),
+      supabase.from('transactions')
+        .select('month')
+        .eq('user_id', user.id)
+        .order('month'),
+    ]);
+
+    // Budget map: category_id → total actual spend
+    const budgetMap: Record<string, number> = {};
+    for (const row of (budgetRes.data || [])) {
+      budgetMap[row.category_id] = (budgetMap[row.category_id] ?? 0) + (parseFloat(row.actual_amount) || 0);
+    }
+
+    // Distinct months from transactions (YYYY-MM-DD → YYYY-MM)
+    const txMonthSet = new Set<string>(
+      (txMonthRes.data || []).map((r: any) => (r.month as string).slice(0, 7))
+    );
+
+    const hasSelectedMonthTx = txMonthSet.has(selectedYM);
+
+    renderUploadPrompt(hasSelectedMonthTx, selectedMonthName);
+    renderCategories(categoryRes.data || [], budgetMap);
+    renderCalendar(txMonthSet, selectedYM);
+  }
+
+  window.handleSignOut = handleSignOut;
+  window.goToMonth     = goToMonth;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
+
+<style is:global>
+  .db-month-chip {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    font-weight: 300;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Calendar ──────────────────────────────────────────────────────── */
+  .db-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .cal-month {
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-align: center;
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+
+  .cal-month.complete {
+    background: rgba(200,245,96,0.12);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .cal-month.current {
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  .cal-month.empty {
+    color: var(--text-dim);
+    opacity: 0.5;
+  }
+
+  .cal-month:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    opacity: 1;
+  }
+
+  .signout-link {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .signout-link:hover { color: var(--red); }
+
+  /* Prevent layout shift when switching months */
+  #dbCatList {
+    min-height: 400px;
+  }
+</style>
+
+</body>
+</html>

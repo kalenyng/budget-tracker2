@@ -1,0 +1,22 @@
+---
+interface Props {
+  activePage?: 'home' | 'sort' | 'settings';
+}
+
+const { activePage = 'home' } = Astro.props;
+---
+
+<nav class="mobile-nav">
+  <a href="/mobile-dashboard" class={activePage === 'home' ? 'active' : ''}>
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Home
+  </a>
+  <a href="/mobile-sort" class={activePage === 'sort' ? 'active' : ''}>
+    <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+    Sort
+  </a>
+  <a href="/settings" class={activePage === 'settings' ? 'active' : ''}>
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>
+    Settings
+  </a>
+</nav>
