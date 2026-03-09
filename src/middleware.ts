@@ -1,7 +1,8 @@
 import { defineMiddleware } from 'astro:middleware';
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  const mode = import.meta.env.PUBLIC_SITE_MODE ?? 'desktop';
+  // Trim whitespace/newlines from environment variable
+  const mode = (import.meta.env.PUBLIC_SITE_MODE ?? 'desktop').trim();
   const pathname = context.url.pathname;
 
   const isMobileRoute = pathname.startsWith('/mobile');
