@@ -14,6 +14,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Mobile deployment: redirect all non-mobile routes to mobile-dashboard
   if (mode === 'mobile') {
     if (!isMobileRoute) {
+      // Special case: redirect /settings to /mobile-settings
+      if (pathname === '/settings' || pathname === '/settings/') {
+        return context.redirect('/mobile-settings', 307);
+      }
       return context.redirect('/mobile-dashboard', 307);
     }
   }
