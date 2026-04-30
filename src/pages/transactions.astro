@@ -320,7 +320,7 @@
     const { data, error } = await supabase
       .from('categories')
       .select('id, name, category_group')
-      .order('category_group', { ascending: true, nullsFirst: false })
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true });
 
     if (error) {
@@ -766,6 +766,60 @@
     });
   }
 
+  // ─── Scroll helper ────────────────────────────────────────────────────────
+
+  /**
+   * Scroll the table wrapper so that activeTd is fully visible, accounting for:
+   *   - the sticky thead height (top)
+   *   - the sticky tfoot height (bottom)
+   *   - the combined width of all three sticky left columns (horizontal)
+   *
+   * We read the actual rendered positions from the DOM instead of hard-coding
+   * pixel values so the function stays correct if CSS widths ever change.
+   */
+  function scrollActiveCellIntoView() {
+    const wrapper = document.getElementById('tableWrapper');
+    if (!wrapper || !activeTd) return;
+
+    const cr = activeTd.getBoundingClientRect();
+    const wr = wrapper.getBoundingClientRect();
+
+    // ── Vertical ──────────────────────────────────────────────────────────
+    // Sticky thead occupies the top; sticky tfoot occupies the bottom.
+    const head = document.getElementById('txHead');
+    const foot = document.getElementById('txFoot');
+    const HEADER_H = head ? head.getBoundingClientRect().height : 38;
+    const FOOTER_H = foot ? foot.getBoundingClientRect().height : 36;
+
+    const relTop    = cr.top    - wr.top;
+    const relBottom = cr.bottom - wr.top;
+
+    if (relTop < HEADER_H) {
+      wrapper.scrollTop += relTop - HEADER_H;
+    } else if (relBottom > wrapper.clientHeight - FOOTER_H) {
+      wrapper.scrollTop += relBottom - (wrapper.clientHeight - FOOTER_H);
+    }
+
+    // ── Horizontal ────────────────────────────────────────────────────────
+    // The sticky block ends at the right edge of the Amount column header.
+    // Reading it from the DOM means we never need to hard-code pixel offsets.
+    const amtTh = wrapper.querySelector<HTMLElement>('th.col-amt');
+    const STICKY_W = amtTh
+      ? amtTh.getBoundingClientRect().right - wr.left
+      : 470; // fallback: date(120) + desc(220) + amt(130)
+
+    const relLeft  = cr.left  - wr.left;
+    const relRight = cr.right - wr.left;
+
+    if (relLeft < STICKY_W) {
+      // Cell is hidden behind the sticky block → scroll left
+      wrapper.scrollLeft += relLeft - STICKY_W;
+    } else if (relRight > wrapper.clientWidth) {
+      // Cell is clipped off the right edge → scroll right
+      wrapper.scrollLeft += relRight - wrapper.clientWidth;
+    }
+  }
+
   // ─── Active Cell ──────────────────────────────────────────────────────────
 
   /**
@@ -773,6 +827,10 @@
    * Only touches two DOM elements: old active cell and new active cell.
    */
   function setActiveCell(row: number, cat: number) {
+    // Clear previous active row highlight
+    const prevRowEl = document.querySelector<HTMLTableRowElement>('tr.active-row');
+    if (prevRowEl) prevRowEl.classList.remove('active-row');
+
     if (activeTd) activeTd.classList.remove('active-cell');
 
     activeRow           = Math.max(0, Math.min(row, transactions.length - 1));
@@ -782,9 +840,13 @@
       `td.cat-cell[data-row="${activeRow}"][data-cat="${activeCategoryIndex}"]`
     );
 
+    // Highlight the entire row so the user always knows which row they're on
+    const rowEl = document.querySelector<HTMLTableRowElement>(`tr[data-row="${activeRow}"]`);
+    if (rowEl) rowEl.classList.add('active-row');
+
     if (activeTd) {
       activeTd.classList.add('active-cell');
-      activeTd.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      scrollActiveCellIntoView();
     }
   }
 
@@ -1126,9 +1188,20 @@
       (manualRows || []).map(r => `${r.date}||${r.description}||${r.amount}`)
     );
 
-    // Step 2: Filter out any incoming transaction that matches a protected natural key
+    // Step 2: Filter out any incoming transaction that matches a protected natural key,
+    // then deduplicate on the conflict key to avoid "ON CONFLICT DO UPDATE command cannot
+    // affect row a second time" when the import contains identical rows.
+    const seenKeys = new Set<string>();
     const upsertPayload = toCommit
       .filter(tx => !protectedKeys.has(`${tx.date}||${tx.description}||${tx.amount}`))
+      .reduce<typeof toCommit>((acc, tx) => {
+        const key = `${tx.date}||${tx.description}||${tx.amount}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          acc.push(tx);
+        }
+        return acc;
+      }, [])
       .map(tx => ({
         user_id:     user.id,
         month:       monthDate,
@@ -1324,6 +1397,11 @@
     white-space: nowrap;
   }
 
+  /* Date + description + amount header corners: sticky top AND left → highest z-index */
+  th.col-date { z-index: 4; }
+  th.col-desc { z-index: 4; }
+  th.col-amt  { z-index: 4; }
+
   .tx-table td {
     padding: 7px 10px;
     border-bottom: 1px solid var(--border);
@@ -1338,20 +1416,66 @@
 
   .tx-table tbody tr:hover td { background: var(--surface2); }
 
-  /* Fixed column widths */
+  /* Active row — same tint as hover so keyboard nav feels native */
+  .tx-table tbody tr.active-row td { background: var(--surface2); }
+
+  /* Fixed column widths — date and description also frozen when scrolling right */
   .col-date {
+    width: 100px;
     min-width: 100px;
     color: var(--text-dim) !important;
     font-size: 11px !important;
     white-space: nowrap;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
+
+  /* td.col-date needs an explicit background to cover scrolled content */
+  td.col-date {
+    background: var(--surface);
   }
 
   .col-desc {
+    width: 200px;
     min-width: 200px;
-    max-width: 340px;
+    max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    position: sticky;
+    /* date: 100px content + 20px padding (10px each side) = 120px */
+    left: 120px;
+    z-index: 1;
+  }
+
+  td.col-desc {
+    background: var(--surface);
+  }
+
+  /* Amount column needs its own opaque background to cover scrolling content */
+  td.col-amt {
+    background: var(--surface);
+  }
+
+  /* Keep sticky column backgrounds in sync with row hover / active-row states */
+  .tx-table tbody tr:hover td.col-date,
+  .tx-table tbody tr:hover td.col-desc,
+  .tx-table tbody tr:hover td.col-amt {
+    background: var(--surface2);
+  }
+
+  .tx-table tbody tr.active-row td.col-date,
+  .tx-table tbody tr.active-row td.col-desc,
+  .tx-table tbody tr.active-row td.col-amt {
+    background: var(--surface2);
+  }
+
+  /* Tfoot sticky columns — match the footer's own background */
+  .tx-table tfoot td.col-date,
+  .tx-table tfoot td.col-desc,
+  .tx-table tfoot td.col-amt {
+    background: var(--surface2);
   }
 
   .col-amt {
@@ -1359,6 +1483,12 @@
     text-align: right !important;
     font-weight: 500;
     white-space: nowrap;
+    position: sticky;
+    /* date(120) + desc(200px content + 20px padding = 220px) = 340px */
+    left: 340px;
+    z-index: 1;
+    /* shadow marks the right edge of the entire pinned block */
+    box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.25);
   }
 
   /* Expense category header columns */
@@ -1396,8 +1526,8 @@
   /* ── Active cell highlight ───────────────────────────────────────────────── */
 
   td.active-cell {
-    /* Subtle accent tint behind the cell value */
-    background: color-mix(in srgb, var(--accent) 14%, var(--surface)) !important;
+    /* Stronger accent tint so the cell stands out against the row highlight */
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface)) !important;
     /* Bold accent outline so the active position is unambiguous */
     outline:        2px solid var(--accent);
     outline-offset: -2px;

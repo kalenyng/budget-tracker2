@@ -1,6 +1,8 @@
 ---
 // Yearly overview page
 import { supabase } from '../lib/supabase';
+import MetricCard from '../components/MetricCard.astro';
+import InsightsPanel from '../components/InsightsPanel.astro';
 
 // Prevent pre-rendering so middleware can redirect
 export const prerender = false;
@@ -46,29 +48,40 @@ export const prerender = false;
     
   </header>
 
-  <!-- Year Summary -->
-  <div class="summary-grid" id="yearSummary" style="margin-bottom: 24px;">
-    <div class="summary-card">
-      <div class="label">Total Income</div>
-      <div class="val green" id="yearIncome">—</div>
-      <div class="note">For the year</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Total Budget</div>
-      <div class="val" id="yearBudget">—</div>
-      <div class="note">Planned expenses</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Total Actual</div>
-      <div class="val" id="yearActual">—</div>
-      <div class="note">Actual spending</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Var</div>
-      <div class="val" id="yearNet">—</div>
-      <div class="note" id="yearNetNote">—</div>
-    </div>
+  <!-- Status Banner -->
+  <div id="statusBanner" class="status-banner" style="display: none;">
+    <span id="statusIcon" class="status-icon"></span>
+    <span id="statusLabel" class="status-label">—</span>
+    <span id="statusDetail" class="status-detail"></span>
   </div>
+
+  <!-- Decision Dashboard -->
+  <div class="summary-grid decision-grid" id="yearSummary" style="margin-bottom: 24px;">
+    <MetricCard
+      id="remainingBudget"
+      label="Remaining Budget"
+    />
+    <MetricCard
+      id="spend"
+      label="Spend vs Expected"
+      note="—"
+      variant="compare"
+    />
+    <MetricCard
+      id="burnRate"
+      label="Monthly Burn Rate"
+      note="Average monthly spend"
+    />
+    <MetricCard
+      id="projected"
+      label="Projected full-year spend"
+      subtitle="Predicted total for the financial year"
+      note="Based on current burn rate"
+    />
+  </div>
+
+  <!-- Problem Detection: Insights Panel -->
+  <InsightsPanel />
 
   <!-- Currency Conversion Summary -->
   <div class="balance-section" id="zarToGbpSummary" style="margin-bottom: 48px; display: none;">
@@ -140,6 +153,8 @@ export const prerender = false;
   import { supabase } from '../lib/supabase';
   import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
   import { formatCurrency, getCurrencySymbol, type CurrencyCode } from '../lib/currency';
+  import { getYearlyMetrics, getMonthsElapsed, type YearlyMetrics } from '../lib/yearlyMetrics';
+  import { getInsights } from '../lib/insights';
   import { showConfirm } from '../lib/dialogs';
   import type { User } from '@supabase/supabase-js';
 
@@ -203,6 +218,8 @@ export const prerender = false;
     name: string;
     annualBudget: number;
     annualActual: number;
+    sortOrder?: number;
+    type: 'fixed' | 'variable';
   }
 
   // Window interface extension
@@ -232,6 +249,7 @@ export const prerender = false;
   let yearBudget = 0;
   let yearActual = 0;
   let yearNet = 0;
+  let monthsElapsed = 0;
   let userCurrency: CurrencyCode = 'ZAR'; // User's preferred currency
   let showCurrencyConversion = false;
   let conversionCurrency: CurrencyCode = 'GBP';
@@ -316,6 +334,10 @@ export const prerender = false;
   }
 
   function showSkeletons() {
+    // Hide status banner while loading
+    const statusBanner = document.getElementById('statusBanner');
+    if (statusBanner) statusBanner.style.display = 'none';
+
     // Year summary cards skeleton
     const yearSummary = document.getElementById('yearSummary');
     if (yearSummary) {
@@ -361,29 +383,311 @@ export const prerender = false;
     }
   }
 
-  function restoreSummaryCards() {
+  function restoreDecisionCards() {
     const yearSummary = document.getElementById('yearSummary');
     if (!yearSummary) return;
     yearSummary.innerHTML = `
-      <div class="summary-card">
-        <div class="label">Total Income</div>
-        <div class="val green" id="yearIncome">—</div>
-        <div class="note">For the year</div>
+      <div class="summary-card decision-card" id="card-remainingBudget">
+        <div class="label">Remaining Budget</div>
+        <div class="decision-val" id="remainingBudgetVal">—</div>
+        <div class="decision-sub" id="remainingBudgetSub"></div>
       </div>
-      <div class="summary-card">
-        <div class="label">Total Budget</div>
-        <div class="val" id="yearBudget">—</div>
-        <div class="note">Planned expenses</div>
+      <div class="summary-card decision-card" id="card-spend">
+        <div class="label">Spend vs Expected</div>
+        <div class="decision-compare">
+          <div class="decision-compare-row">
+            <span class="decision-compare-label">Actual</span>
+            <span class="decision-compare-val" id="spendActualVal">—</span>
+          </div>
+          <div class="decision-compare-row">
+            <span class="decision-compare-label">Expected</span>
+            <span class="decision-compare-val" id="spendExpectedVal">—</span>
+          </div>
+        </div>
+        <div class="decision-sub" id="spendDiffVal"></div>
+        <div class="note" id="spendNote">—</div>
       </div>
-      <div class="summary-card">
-        <div class="label">Total Actual</div>
-        <div class="val" id="yearActual">—</div>
-        <div class="note">Actual spending</div>
+      <div class="summary-card decision-card" id="card-burnRate">
+        <div class="label">Monthly Burn Rate</div>
+        <div class="decision-val" id="burnRateVal">—</div>
+        <div class="decision-sub" id="burnRateSub"></div>
+        <div class="note" id="burnRateNote">Average monthly spend</div>
       </div>
-      <div class="summary-card">
-        <div class="label">Var</div>
-        <div class="val" id="yearNet">—</div>
-        <div class="note" id="yearNetNote">—</div>
+      <div class="summary-card decision-card" id="card-projected">
+        <div class="label">Projected full-year spend</div>
+        <div class="decision-card-subtitle">Predicted total for the financial year</div>
+        <div class="decision-val" id="projectedVal">—</div>
+        <div class="decision-sub" id="projectedSub"></div>
+        <div class="note" id="projectedNote">Based on current burn rate</div>
+      </div>
+    `;
+  }
+
+  // ── Decision dashboard update ────────────────────────────────────────────────
+
+  function updateStatusBanner(metrics: YearlyMetrics): void {
+    const banner   = document.getElementById('statusBanner');
+    const iconEl   = document.getElementById('statusIcon');
+    const labelEl  = document.getElementById('statusLabel');
+    const detailEl = document.getElementById('statusDetail');
+    if (!banner || !iconEl || !labelEl || !detailEl) return;
+
+    if (!metrics.hasData) {
+      banner.style.display = 'flex';
+      banner.className = 'status-banner status-no-data';
+      iconEl.textContent  = '○';
+      labelEl.textContent = 'No data yet';
+      detailEl.textContent = 'Start adding transactions to see insights';
+      return;
+    }
+
+    banner.style.display = 'flex';
+    banner.className = 'status-banner'; // reset
+
+    const SVG_ON_TRACK = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><polyline points="4.5,8.5 7,11 11.5,5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const SVG_WARNING   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6.5" x2="8" y2="9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.75" fill="currentColor"/></svg>`;
+    const SVG_OVER      = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
+    switch (metrics.status) {
+      case 'on-track':
+        banner.classList.add('status-on-track');
+        iconEl.innerHTML    = SVG_ON_TRACK;
+        labelEl.textContent = 'On Track';
+        detailEl.textContent = metrics.spendDiff < 0
+          ? `${formatCurrency(Math.abs(metrics.spendDiff), userCurrency)} under expected spend`
+          : `Spending right on pace`;
+        break;
+      case 'slightly-over':
+        banner.classList.add('status-slightly-over');
+        iconEl.innerHTML    = SVG_WARNING;
+        labelEl.textContent = 'Slightly Over';
+        detailEl.textContent = `${formatCurrency(metrics.spendDiff, userCurrency)} over expected spend`;
+        break;
+      case 'overspending':
+        banner.classList.add('status-overspending');
+        iconEl.innerHTML    = SVG_OVER;
+        labelEl.textContent = 'Overspending';
+        detailEl.textContent = `${formatCurrency(metrics.spendDiff, userCurrency)} over expected spend`;
+        break;
+      default:
+        banner.style.display = 'none';
+    }
+  }
+
+  function updateDecisionDashboard(): void {
+    const metrics = getYearlyMetrics({ totalBudget: yearBudget, actualSpend: yearActual, monthsElapsed });
+
+    // ── Card 1: Remaining Budget ──────────────────────────────────────────────
+    // Always show the budget remainder — budget data exists even without spend.
+    const remVal  = document.getElementById('remainingBudgetVal');
+    const remSub  = document.getElementById('remainingBudgetSub');
+
+    if (remVal) {
+      if (!metrics.hasData) {
+        remVal.textContent = yearBudget > 0
+          ? formatCurrency(yearBudget, userCurrency)
+          : '—';
+        remVal.className = 'decision-val neutral';
+      } else {
+        remVal.textContent = formatCurrency(Math.abs(metrics.remaining), userCurrency);
+        remVal.className   = 'decision-val ' + (metrics.remaining >= 0 ? 'green' : 'red');
+      }
+    }
+    if (remSub) {
+      if (!metrics.hasData) {
+        remSub.textContent = yearBudget > 0 ? 'No spending recorded yet' : '';
+        remSub.className   = 'decision-sub';
+      } else if (metrics.remaining >= 0) {
+        remSub.textContent = `${formatCurrency(yearActual, userCurrency)} spent of ${formatCurrency(yearBudget, userCurrency)}`;
+        remSub.className   = 'decision-sub';
+      } else {
+        remSub.textContent = `${formatCurrency(Math.abs(metrics.remaining), userCurrency)} over budget`;
+        remSub.className   = 'decision-sub over';
+      }
+    }
+
+    // ── Card 2: Spend vs Expected ─────────────────────────────────────────────
+    const actVal     = document.getElementById('spendActualVal');
+    const expVal     = document.getElementById('spendExpectedVal');
+    const diffVal    = document.getElementById('spendDiffVal');
+    const spendNote  = document.getElementById('spendNote');
+
+    if (actVal) {
+      actVal.textContent = metrics.hasData ? formatCurrency(yearActual, userCurrency) : '—';
+    }
+    if (expVal) {
+      if (metrics.hasData) {
+        expVal.textContent = formatCurrency(metrics.expectedSpend, userCurrency);
+      } else if (yearBudget > 0 && monthsElapsed > 0) {
+        // Show what you should have spent even when actual = 0
+        expVal.textContent = formatCurrency(yearBudget * (monthsElapsed / 12), userCurrency);
+      } else {
+        expVal.textContent = '—';
+      }
+    }
+    if (diffVal) {
+      if (!metrics.hasData) {
+        diffVal.textContent = "You haven't spent anything yet";
+        diffVal.className   = 'decision-sub';
+      } else if (metrics.spendDiff > 100) {
+        diffVal.textContent = `Over by ${formatCurrency(metrics.spendDiff, userCurrency)}`;
+        diffVal.className   = 'decision-sub over';
+      } else if (metrics.spendDiff < -100) {
+        diffVal.textContent = `Under by ${formatCurrency(Math.abs(metrics.spendDiff), userCurrency)}`;
+        diffVal.className   = 'decision-sub under';
+      } else {
+        diffVal.textContent = 'Right on pace';
+        diffVal.className   = 'decision-sub under';
+      }
+    }
+    if (spendNote) {
+      spendNote.textContent = metrics.hasData
+        ? `${Math.round(metrics.progress * 100)}% of financial year elapsed`
+        : yearBudget > 0 && monthsElapsed > 0
+          ? `You should have spent ${formatCurrency(yearBudget * (monthsElapsed / 12), userCurrency)} by now`
+          : '—';
+    }
+
+    // ── Card 3: Monthly Burn Rate ─────────────────────────────────────────────
+    const burnVal  = document.getElementById('burnRateVal');
+    const burnSub  = document.getElementById('burnRateSub');
+    const burnNote = document.getElementById('burnRateNote');
+    const monthlyBudget = yearBudget > 0 ? yearBudget / 12 : 0;
+
+    if (burnVal) {
+      if (!metrics.hasData) {
+        burnVal.textContent = '—';
+        burnVal.className   = 'decision-val neutral';
+      } else {
+        burnVal.textContent = formatCurrency(metrics.burnRate, userCurrency);
+        burnVal.className   = 'decision-val ' + (monthlyBudget > 0 && metrics.burnRate > monthlyBudget ? 'red' : 'green');
+      }
+    }
+    if (burnSub) {
+      if (!metrics.hasData) {
+        burnSub.textContent = 'Not enough data yet';
+        burnSub.className   = 'decision-sub';
+      } else if (monthlyBudget > 0) {
+        const diff = metrics.burnRate - monthlyBudget;
+        if (diff > 100) {
+          burnSub.textContent = `${formatCurrency(diff, userCurrency)}/mo over budget`;
+          burnSub.className   = 'decision-sub over';
+        } else if (diff < -100) {
+          burnSub.textContent = `${formatCurrency(Math.abs(diff), userCurrency)}/mo under budget`;
+          burnSub.className   = 'decision-sub under';
+        } else {
+          burnSub.textContent = 'On budget';
+          burnSub.className   = 'decision-sub under';
+        }
+      } else {
+        burnSub.textContent = '';
+      }
+    }
+    if (burnNote) {
+      burnNote.textContent = metrics.hasData
+        ? `Average over ${metrics.monthsElapsed} month${metrics.monthsElapsed !== 1 ? 's' : ''}`
+        : 'Average monthly spend';
+    }
+
+    // ── Card 4: Projected full-year spend ─────────────────────────────────────
+    const projVal  = document.getElementById('projectedVal');
+    const projSub  = document.getElementById('projectedSub');
+    const projNote = document.getElementById('projectedNote');
+
+    if (projVal) {
+      if (!metrics.hasData) {
+        projVal.textContent = '—';
+        projVal.className   = 'decision-val neutral';
+      } else {
+        projVal.textContent = formatCurrency(metrics.projectedTotal, userCurrency);
+        projVal.className   = 'decision-val ' + (metrics.projectedDiff > 0 ? 'red' : 'green');
+      }
+    }
+    if (projSub) {
+      if (!metrics.hasData) {
+        projSub.textContent = 'Will calculate after spending begins';
+        projSub.className   = 'decision-sub';
+      } else if (metrics.projectedDiff > 100) {
+        projSub.textContent = `Projected overspend: ${formatCurrency(metrics.projectedDiff, userCurrency)}`;
+        projSub.className   = 'decision-sub over';
+      } else if (metrics.projectedDiff < -100) {
+        projSub.textContent = `Projected surplus: ${formatCurrency(Math.abs(metrics.projectedDiff), userCurrency)}`;
+        projSub.className   = 'decision-sub under';
+      } else {
+        projSub.textContent = 'Projected to finish on budget';
+        projSub.className   = 'decision-sub under';
+      }
+    }
+    if (projNote) {
+      // Footer adds context; avoid repeating the sub-line (which already names surplus/overspend).
+      projNote.textContent = metrics.hasData
+        ? 'Based on average spend so far'
+        : 'Based on current burn rate';
+    }
+
+    updateStatusBanner(metrics);
+
+    // ── Card state: dim cards that have no real data ───────────────────────
+    const allCardIds = ['remainingBudget', 'spend', 'burnRate', 'projected'];
+    allCardIds.forEach(cardId => {
+      const card = document.getElementById(`card-${cardId}`);
+      if (!card) return;
+      if (!metrics.hasData) {
+        card.classList.add('no-data');
+      } else {
+        card.classList.remove('no-data');
+      }
+    });
+    // Remaining Budget always shows the budget remainder, so never dim it
+    const remCard = document.getElementById('card-remainingBudget');
+    if (remCard) remCard.classList.remove('no-data');
+  }
+
+  // ── Insights panel ───────────────────────────────────────────────────────
+
+  function buildInsightsPanel(): void {
+    const panel = document.getElementById('insightsPanel');
+    if (!panel) return;
+
+    const burnRate      = monthsElapsed > 0 ? yearActual / monthsElapsed : 0;
+    const projectedTotal = burnRate * 12;
+    const yearProgress   = monthsElapsed / 12;
+    const expectedSpend  = yearBudget * yearProgress;
+
+    const insights = getInsights({
+      totalBudget:    yearBudget,
+      actualSpend:    yearActual,
+      expectedSpend,
+      projectedTotal,
+      yearProgress,
+      categories: categoryData.map(c => ({
+        name: c.name,
+        budget: c.annualBudget,
+        actual: c.annualActual,
+        type: c.type,
+      })),
+      format: (n: number) => formatCurrency(n, userCurrency),
+    });
+
+    if (insights.length === 0) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div class="section-title">What needs your attention</div>
+      <div class="insights-list">
+        ${insights.map(ins => `
+          <div class="insight-row insight-${ins.type}">
+            <span class="insight-dot insight-dot-${ins.type}" aria-hidden="true"></span>
+            <span class="insight-text">
+              <span class="insight-head">${ins.title}</span>
+              <span class="insight-detail">${ins.message}</span>
+              ${ins.category ? `<span class="insight-tag">${ins.category}</span>` : ''}
+            </span>
+          </div>
+        `).join('')}
       </div>
     `;
   }
@@ -437,10 +741,17 @@ export const prerender = false;
       // Load all categories with their monthly_amount defaults
       const { data: allCategories } = await supabase
         .from('categories')
-        .select('id, name, monthly_amount');
-      const catMonthlyMap: Record<string, { name: string; monthlyAmount: number }> = {};
-      (allCategories || []).forEach(c => {
-        catMonthlyMap[c.id] = { name: c.name, monthlyAmount: parseFloat(c.monthly_amount || 0) };
+        .select('id, name, monthly_amount, sort_order, type')
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('name', { ascending: true });
+      const catMonthlyMap: Record<string, { name: string; monthlyAmount: number; sortOrder: number; type: 'fixed' | 'variable' }> = {};
+      (allCategories || []).forEach((c, i) => {
+        catMonthlyMap[c.id] = {
+          name: c.name,
+          monthlyAmount: parseFloat(c.monthly_amount || 0),
+          sortOrder: c.sort_order ?? i,
+          type: c.type === 'fixed' ? 'fixed' : 'variable',
+        };
       });
 
       // Load budgets for all months (RLS should filter by user_id, but we'll be explicit)
@@ -468,9 +779,9 @@ export const prerender = false;
         const catId = b.category_id;
         if (catId) {
           if (!catMap[catId]) {
-            const catInfo = catMonthlyMap[catId] || { name: 'Unknown', monthlyAmount: 0 };
+            const catInfo = catMonthlyMap[catId] || { name: 'Unknown', monthlyAmount: 0, sortOrder: 9999, type: 'variable' as const };
             // annualBudget = monthly_amount * 12 (category default, not summed row budgets)
-            catMap[catId] = { id: catId, name: catInfo.name, annualBudget: catInfo.monthlyAmount * 12, annualActual: 0 };
+            catMap[catId] = { id: catId, name: catInfo.name, annualBudget: catInfo.monthlyAmount * 12, annualActual: 0, sortOrder: catInfo.sortOrder, type: catInfo.type };
           }
           catMap[catId].annualActual += actualAmount;
 
@@ -483,11 +794,11 @@ export const prerender = false;
       // Also include categories that have a monthly_amount but no budget rows yet this FY
       Object.entries(catMonthlyMap).forEach(([catId, catInfo]) => {
         if (!catMap[catId] && catInfo.monthlyAmount > 0) {
-          catMap[catId] = { id: catId, name: catInfo.name, annualBudget: catInfo.monthlyAmount * 12, annualActual: 0 };
+          catMap[catId] = { id: catId, name: catInfo.name, annualBudget: catInfo.monthlyAmount * 12, annualActual: 0, sortOrder: catInfo.sortOrder, type: catInfo.type };
         }
       });
 
-      categoryData = Object.values(catMap).sort((a, b) => a.name.localeCompare(b.name));
+      categoryData = Object.values(catMap).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999));
 
       // Build monthly data with explicit order (April=0, May=1, ..., March=11)
       // Reset monthlyData to ensure we only have current financial year months
@@ -513,31 +824,17 @@ export const prerender = false;
 
       // Calculate year totals
       yearIncome = monthlyData.reduce((sum, m) => sum + m.income, 0);
-      yearBudget = monthlyData.reduce((sum, m) => sum + m.budget, 0);
+      yearBudget = Object.values(catMonthlyMap).reduce((sum, c) => sum + c.monthlyAmount, 0) * 12;
       yearActual = monthlyData.reduce((sum, m) => sum + m.actual, 0);
       yearNet = yearIncome - yearActual;
 
-      // Restore summary cards before writing values
-      restoreSummaryCards();
+      // How many FY months have at least started (drives expected-spend & burn-rate)
+      monthsElapsed = getMonthsElapsed(currentYear);
 
-      // Update year summary
-      const yearIncomeEl = document.getElementById('yearIncome');
-      const yearBudgetEl = document.getElementById('yearBudget');
-      const yearActualEl = document.getElementById('yearActual');
-      const yearNetEl = document.getElementById('yearNet');
-      const yearNetNoteEl = document.getElementById('yearNetNote');
-      
-      if (yearIncomeEl) yearIncomeEl.textContent = formatCurrency(Math.round(yearIncome), userCurrency);
-      if (yearBudgetEl) yearBudgetEl.textContent = formatCurrency(Math.round(yearBudget), userCurrency);
-      if (yearActualEl) yearActualEl.textContent = formatCurrency(Math.round(yearActual), userCurrency);
-      if (yearNetEl) {
-        yearNetEl.textContent = formatCurrency(Math.round(yearNet), userCurrency);
-        yearNetEl.className = 'val ' + (yearNet >= 0 ? 'green' : 'red');
-      }
-      if (yearNetNoteEl) {
-        yearNetNoteEl.textContent = yearNet >= 0 ? 'Surplus' : 'Deficit';
-        yearNetNoteEl.style.color = yearNet >= 0 ? 'var(--accent)' : 'var(--red)';
-      }
+      // Restore decision cards then populate them
+      restoreDecisionCards();
+      updateDecisionDashboard();
+      buildInsightsPanel();
 
       // Build category breakdown
       buildCategoryBreakdown();
@@ -632,7 +929,7 @@ export const prerender = false;
       rect.addEventListener('mouseover', (e: MouseEvent) => {
         const month = rect.dataset.month || '';
         const amount = parseFloat(rect.dataset.amount || '0');
-        tooltip.textContent = `${month}  ${formatCurrency(Math.round(amount), userCurrency)}`;
+        tooltip.textContent = `${month}  ${formatCurrency(amount, userCurrency)}`;
         tooltip.style.opacity = '1';
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY - 28}px`;
@@ -705,15 +1002,15 @@ export const prerender = false;
         </div>
         <div class="cat-row">
           <span class="label">Annual Budget</span>
-          <span class="cat-val">${formatCurrency(Math.round(cat.annualBudget), userCurrency)}</span>
+          <span class="cat-val">${formatCurrency(cat.annualBudget, userCurrency)}</span>
         </div>
         <div class="cat-row">
           <span class="label">Spent</span>
-          <span class="cat-val">${formatCurrency(Math.round(cat.annualActual), userCurrency)}</span>
+          <span class="cat-val">${formatCurrency(cat.annualActual, userCurrency)}</span>
         </div>
         <div class="cat-row">
           <span class="label">Remaining</span>
-          <span class="cat-val ${remainingClass}">${formatCurrency(Math.round(Math.abs(remaining)), userCurrency)}${remaining < 0 ? ' over' : ''}</span>
+          <span class="cat-val ${remainingClass}">${formatCurrency(Math.abs(remaining), userCurrency)}${remaining < 0 ? ' over' : ''}</span>
         </div>
         <div class="cat-progress-track">
           <div class="cat-progress-bar ${overBudget ? 'over' : ''}" style="width: ${progressPct}%;"></div>
@@ -783,7 +1080,7 @@ export const prerender = false;
     const yearBudgetZarEl = document.getElementById('yearBudgetZar');
     const yearBudgetGbpEl = document.getElementById('yearBudgetGbp');
     if (yearBudgetZarEl) {
-      yearBudgetZarEl.textContent = formatCurrency(Math.round(yearBudget), userCurrency);
+      yearBudgetZarEl.textContent = formatCurrency(yearBudget, userCurrency);
     }
     if (yearBudgetGbpEl && exchangeRate > 0) {
       const converted = yearBudget * exchangeRate;
@@ -794,7 +1091,7 @@ export const prerender = false;
     const yearActualZarEl = document.getElementById('yearActualZar');
     const yearActualGbpEl = document.getElementById('yearActualGbp');
     if (yearActualZarEl) {
-      yearActualZarEl.textContent = formatCurrency(Math.round(yearActual), userCurrency);
+      yearActualZarEl.textContent = formatCurrency(yearActual, userCurrency);
     }
     if (yearActualGbpEl && exchangeRate > 0) {
       const converted = yearActual * exchangeRate;
@@ -805,7 +1102,7 @@ export const prerender = false;
     const yearNetZarEl = document.getElementById('yearNetZar');
     const yearNetGbpEl = document.getElementById('yearNetGbp');
     if (yearNetZarEl) {
-      yearNetZarEl.textContent = formatCurrency(Math.round(yearNet), userCurrency);
+      yearNetZarEl.textContent = formatCurrency(yearNet, userCurrency);
     }
     if (yearNetGbpEl && exchangeRate > 0) {
       const converted = yearNet * exchangeRate;
@@ -836,9 +1133,9 @@ export const prerender = false;
       return `
         <tr style="border-bottom:1px solid var(--border);">
           <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text-dim);">${FY_MONTH_NAMES[i]}</td>
-          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); text-align:right;">${formatCurrency(Math.round(monthlyAmount), userCurrency)}</td>
-          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); text-align:right;">${formatCurrency(Math.round(actual), userCurrency)}</td>
-          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:${varianceColor}; text-align:right;">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</td>
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); text-align:right;">${formatCurrency(monthlyAmount, userCurrency)}</td>
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text); text-align:right;">${formatCurrency(actual, userCurrency)}</td>
+          <td style="padding:8px 4px; font-family:'DM Mono',monospace; font-size:12px; color:${varianceColor}; text-align:right;">${formatCurrency(Math.abs(variance), userCurrency)}</td>
         </tr>`;
     }).join('');
 
@@ -867,15 +1164,15 @@ export const prerender = false;
       totalsEl.innerHTML = `
         <div>
           <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Annual Budget</div>
-          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--text);">${formatCurrency(Math.round(totalBudget), userCurrency)}</div>
+          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--text);">${formatCurrency(totalBudget, userCurrency)}</div>
         </div>
         <div>
           <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Total Spent</div>
-          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--text);">${formatCurrency(Math.round(totalActual), userCurrency)}</div>
+          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--text);">${formatCurrency(totalActual, userCurrency)}</div>
         </div>
         <div>
           <div style="font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">Remaining</div>
-          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:${remainColor};">${formatCurrency(Math.round(Math.abs(totalRemaining)), userCurrency)}</div>
+          <div style="font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:${remainColor};">${formatCurrency(Math.abs(totalRemaining), userCurrency)}</div>
         </div>`;
     }
 
@@ -1154,6 +1451,239 @@ export const prerender = false;
     background: var(--accent);
     border-color: var(--accent);
     color: var(--bg);
+  }
+
+  /* ── Status Banner ──────────────────────────────────────────────────────── */
+  .status-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 20px;
+    background: var(--surface);
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .status-banner.status-on-track {
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .status-banner.status-slightly-over {
+    border-color: var(--accent2);
+    background: var(--surface);
+    box-shadow: inset 3px 0 0 var(--accent2);
+  }
+
+  .status-banner.status-overspending {
+    border-color: var(--red);
+    background: var(--surface);
+    box-shadow: inset 3px 0 0 var(--red);
+  }
+
+  .status-banner.status-no-data {
+    border-color: var(--border);
+    background: var(--surface);
+    box-shadow: inset 3px 0 0 var(--text-dim);
+  }
+
+  .status-banner.status-no-data .status-label {
+    color: var(--text-dim);
+  }
+
+  .status-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+  }
+
+  .status-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .status-label {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+
+  .status-detail {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Insights Panel (matches month view insight rows) ───────────────────── */
+  .insights-panel {
+    margin-bottom: 48px;
+  }
+
+  .insights-panel .insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .insights-panel .insight-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .insights-panel .insight-row.insight-critical { border-left: 3px solid var(--red); }
+  .insights-panel .insight-row.insight-warning  { border-left: 3px solid var(--accent2); }
+  .insights-panel .insight-row.insight-good     { border-left: 3px solid var(--accent); }
+  .insights-panel .insight-row.insight-info      { border-left: 3px solid var(--muted); }
+
+  .insights-panel .insight-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  .insights-panel .insight-dot-critical { background: var(--red); }
+  .insights-panel .insight-dot-warning  { background: var(--accent2); }
+  .insights-panel .insight-dot-good     { background: var(--accent); }
+  .insights-panel .insight-dot-info      { background: var(--muted); }
+
+  .insights-panel .insight-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--text-dim);
+  }
+
+  .insights-panel .insight-head {
+    font-weight: 500;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .insights-panel .insight-detail {
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .insights-panel .insight-tag {
+    display: inline-block;
+    align-self: flex-start;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 2px;
+    margin-top: 2px;
+  }
+
+  /* ── Decision cards ─────────────────────────────────────────────────────── */
+  .decision-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .decision-card {
+    padding: 28px 24px;
+    position: relative;
+    transition: opacity 0.25s ease;
+  }
+
+  .decision-card.no-data {
+    opacity: 0.55;
+  }
+
+  .decision-card .note:empty {
+    display: none;
+  }
+
+  .decision-card-subtitle {
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    line-height: 1.4;
+    margin: -4px 0 10px;
+    letter-spacing: 0.02em;
+  }
+
+  .decision-val {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 300;
+    color: var(--text);
+    margin: 10px 0 4px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .decision-val.green   { color: var(--accent); }
+  .decision-val.red     { color: var(--red); }
+  .decision-val.yellow  { color: var(--accent2); }
+  .decision-val.neutral { color: var(--text-dim); }
+
+  .decision-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    margin: 6px 0 8px;
+    color: var(--text-dim);
+    letter-spacing: 0.01em;
+  }
+
+  .decision-sub.over  { color: var(--red); }
+  .decision-sub.under { color: var(--accent); }
+
+  .decision-compare {
+    margin: 10px 0 4px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .decision-compare-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 12px;
+  }
+
+  .decision-compare-row + .decision-compare-row {
+    border-top: 1px solid var(--border);
+  }
+
+  .decision-compare-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .decision-compare-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
   }
 
 </style>

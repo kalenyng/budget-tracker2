@@ -421,7 +421,7 @@ import MobileNav from '../components/MobileNav.astro';
     const { data, error } = await supabase
       .from('categories')
       .select('id, name, category_group')
-      .order('category_group', { ascending: true, nullsFirst: false })
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true });
 
     if (error || !data || data.length === 0) {

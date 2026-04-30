@@ -238,8 +238,7 @@ import { supabase } from '../lib/supabase';
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .order('category_group', { ascending: true, nullsFirst: false })
-        .order('type', { ascending: false })
+        .order('sort_order', { ascending: true, nullsFirst: false })
         .order('name', { ascending: true });
       
       if (error) throw error;
@@ -267,13 +266,17 @@ import { supabase } from '../lib/supabase';
     categories.forEach(cat => {
       const div = document.createElement('div');
       div.className = 'category-item';
+      div.setAttribute('draggable', 'true');
+      div.dataset.catId = cat.id;
       
       div.innerHTML = `
+        <div class="drag-handle" title="Drag to reorder">⠿</div>
         <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
           <input type="text" 
                  value="${escapeHtml(cat.name)}" 
                  data-id="${cat.id}"
                  class="category-name-input"
+                 ondragstart="event.stopPropagation()"
                  onchange="updateCategoryName('${cat.id}', this.value)"
                  placeholder="Category name">
           <div style="display: flex; gap: 12px; align-items: center; font-size: 10px; color: var(--text-dim); flex-wrap: wrap;">
@@ -288,6 +291,7 @@ import { supabase } from '../lib/supabase';
             <input type="number"
                    value="${parseFloat(cat.monthly_amount || 0)}"
                    class="category-default-input"
+                   ondragstart="event.stopPropagation()"
                    onchange="updateCategoryDefault('${cat.id}', this.value)"
                    onblur="updateCategoryDefault('${cat.id}', this.value)"
                    placeholder="0"
@@ -295,12 +299,79 @@ import { supabase } from '../lib/supabase';
           </div>
         </div>
         <button onclick="deleteCategory('${cat.id}')" 
+                ondragstart="event.stopPropagation()"
                 class="currency-btn"
                 style="background: var(--red); border-color: var(--red); color: white; width: auto; min-width: 100px;">Delete</button>
       `;
       
       container.appendChild(div);
     });
+
+    setupDragAndDrop();
+  }
+
+  let dragSrcId: string | null = null;
+
+  function setupDragAndDrop() {
+    const container = document.getElementById('categoriesList');
+    if (!container) return;
+
+    container.querySelectorAll<HTMLElement>('.category-item[draggable]').forEach(el => {
+      el.addEventListener('dragstart', (e: DragEvent) => {
+        dragSrcId = el.dataset.catId || null;
+        el.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', dragSrcId || '');
+        }
+      });
+
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging');
+        container.querySelectorAll('.drag-over').forEach(o => o.classList.remove('drag-over'));
+      });
+
+      el.addEventListener('dragover', (e: DragEvent) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        container.querySelectorAll('.drag-over').forEach(o => { if (o !== el) o.classList.remove('drag-over'); });
+        el.classList.add('drag-over');
+      });
+
+      el.addEventListener('dragleave', (e: DragEvent) => {
+        if (!el.contains(e.relatedTarget as Node)) el.classList.remove('drag-over');
+      });
+
+      el.addEventListener('drop', async (e: DragEvent) => {
+        e.preventDefault();
+        el.classList.remove('drag-over');
+        const dropId = el.dataset.catId;
+        if (!dragSrcId || !dropId || dragSrcId === dropId) return;
+
+        const srcIndex = categories.findIndex((c: any) => c.id === dragSrcId);
+        const dstIndex = categories.findIndex((c: any) => c.id === dropId);
+        if (srcIndex === -1 || dstIndex === -1) return;
+
+        const [moved] = categories.splice(srcIndex, 1);
+        categories.splice(dstIndex, 0, moved);
+
+        renderCategories();
+        await saveSortOrder();
+      });
+    });
+  }
+
+  async function saveSortOrder() {
+    try {
+      await Promise.all(
+        categories.map((cat: any, index: number) =>
+          supabase.from('categories').update({ sort_order: index }).eq('id', cat.id)
+        )
+      );
+    } catch (error) {
+      console.error('Error saving sort order:', error);
+      showToast('Error saving order', 'error');
+    }
   }
 
   async function saveCurrencySettings() {
@@ -427,15 +498,17 @@ import { supabase } from '../lib/supabase';
           name: name,
           type: type,
           monthly_amount: 0,
-          user_id: user.id
+          user_id: user.id,
+          sort_order: categories.length
         })
         .select()
         .single();
 
       if (error) throw error;
 
+      categories.push(data);
+      renderCategories();
       showToast(`Category "${name}" added`);
-      await loadCategories();
     } catch (error: any) {
       console.error('Error adding category:', error);
       showToast('Error adding category: ' + error.message, 'error');
@@ -496,6 +569,7 @@ import { supabase } from '../lib/supabase';
   (window as any).saveCurrencySettings = saveCurrencySettings;
   (window as any).handleSignOut = handleSignOut;
   (window as any).toggleTheme = toggleTheme;
+  (window as any).saveSortOrder = saveSortOrder;
 
   // Initialize on load
   if (document.readyState === 'loading') {
@@ -536,10 +610,42 @@ import { supabase } from '../lib/supabase';
     border: 1px solid var(--border);
     border-radius: 8px;
     transition: all 0.15s;
+    cursor: default;
   }
 
   .category-item:hover {
     border-color: var(--accent);
+  }
+
+  .category-item.dragging {
+    opacity: 0.4;
+    border-style: dashed;
+  }
+
+  .category-item.drag-over {
+    border-color: var(--accent);
+    background: var(--surface);
+    transform: scale(1.01);
+  }
+
+  .drag-handle {
+    color: var(--text-dim);
+    cursor: grab;
+    font-size: 18px;
+    padding: 4px 2px;
+    user-select: none;
+    flex-shrink: 0;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+
+  .category-item:hover .drag-handle {
+    opacity: 1;
+  }
+
+  .drag-handle:active {
+    cursor: grabbing;
   }
 
   .category-name-input,

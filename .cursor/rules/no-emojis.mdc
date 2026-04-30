@@ -1,0 +1,28 @@
+---
+description: No emojis in code or UI; use custom SVG icons instead
+alwaysApply: true
+---
+
+# No Emojis
+
+Never use emoji characters anywhere — not in code, UI, comments, or responses.
+
+If an icon is needed in the UI, create a custom inline SVG component instead.
+
+## Examples
+
+BAD — using an emoji as an icon:
+```astro
+<span>💰 Budget</span>
+```
+
+GOOD — custom SVG icon:
+```astro
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+  <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5" />
+  <text x="8" y="12" text-anchor="middle" font-size="9" fill="currentColor">$</text>
+</svg>
+```
+
+- Custom icons must use `currentColor` so they inherit text color
+- Always add `aria-hidden="true"` on decorative icons and a visible label or `aria-label` on interactive ones

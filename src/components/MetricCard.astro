@@ -1,0 +1,57 @@
+---
+/**
+ * MetricCard — reusable decision-dashboard card.
+ *
+ * variant "default":  label [+ subtitle] + large number + sub-line + note
+ * variant "compare":  two-row Actual / Expected comparison + diff line + note
+ *
+ * state "good"    → accent (green) emphasis
+ * state "warning" → red emphasis
+ * state "neutral" → muted/grey; used for no-data or placeholder state
+ *
+ * IDs follow a predictable convention so the client script can find
+ * every element it needs to update:
+ *
+ *   default  →  #{id}Val  #{id}Sub  #{id}Note
+ *   compare  →  #{id}ActualVal  #{id}ExpectedVal  #{id}DiffVal  #{id}Note
+ */
+interface Props {
+  id: string;
+  label: string;
+  /** Muted line under the title (sentence case); use to clarify what the hero number means */
+  subtitle?: string;
+  note?: string;
+  variant?: 'default' | 'compare';
+  state?: 'neutral' | 'good' | 'warning';
+}
+
+const { id, label, subtitle = '', note = '', variant = 'default', state } = Astro.props;
+---
+
+<div class:list={['summary-card', 'decision-card', state && `state-${state}`]} id={`card-${id}`} data-state={state}>
+  <div class="label">{label}</div>
+  {subtitle ? <div class="decision-card-subtitle">{subtitle}</div> : null}
+
+  {variant === 'compare' ? (
+    <>
+      <div class="decision-compare">
+        <div class="decision-compare-row">
+          <span class="decision-compare-label">Actual</span>
+          <span class="decision-compare-val" id={`${id}ActualVal`}>—</span>
+        </div>
+        <div class="decision-compare-row">
+          <span class="decision-compare-label">Expected</span>
+          <span class="decision-compare-val" id={`${id}ExpectedVal`}>—</span>
+        </div>
+      </div>
+      <div class="decision-sub" id={`${id}DiffVal`}></div>
+    </>
+  ) : (
+    <>
+      <div class="decision-val" id={`${id}Val`}>—</div>
+      <div class="decision-sub" id={`${id}Sub`}></div>
+    </>
+  )}
+
+  <div class="note" id={`${id}Note`}>{note}</div>
+</div>

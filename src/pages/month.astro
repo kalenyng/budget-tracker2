@@ -91,28 +91,16 @@ export const prerender = false;
     </div>
   </div>
 
-  <!-- Summary cards -->
-  <div class="summary-grid" id="summaryGrid">
-    <div class="summary-card">
-      <div class="label">Income</div>
-      <div class="val green" id="sumIncomeZar">—</div>
-      <div class="note" id="sumIncomeNote">Set income above</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Budget</div>
-      <div class="val" id="sumBudgetZar">—</div>
-      <div class="note" id="sumNoteZar">Set budgets below</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Actual</div>
-      <div class="val" id="sumActualZar">—</div>
-      <div class="note" id="sumVarianceZar">—</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Var</div>
-      <div class="val" id="sumNetZar">—</div>
-      <div class="note" id="sumNetNote">Income - Actual</div>
-    </div>
+  <!-- Reconciliation Status Bar -->
+  <div id="reconcBar" class="recon-bar" style="display: none;" role="status" aria-live="polite"></div>
+
+  <!-- Financial Summary Block (primary status + secondary metrics) -->
+  <div id="financialSummary" class="fin-summary-wrap" style="display: none;"></div>
+
+  <!-- Insights Section -->
+  <div id="insightsSection" style="display: none; margin-bottom: 48px;">
+    <div class="section-title">Insights</div>
+    <div id="insightsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
   </div>
 
   <!-- Currency Conversion Summary -->
@@ -457,29 +445,24 @@ export const prerender = false;
       `;
     }
 
-    // Summary cards skeleton
-    const summaryGrid = document.getElementById('summaryGrid');
-    if (summaryGrid) {
-      summaryGrid.innerHTML = `
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
-        </div>
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
-        </div>
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
-        </div>
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 55%;"></div>
+    // Reconciliation bar skeleton
+    const reconcBar = document.getElementById('reconcBar');
+    if (reconcBar) {
+      reconcBar.style.display = 'block';
+      reconcBar.innerHTML = `<div class="skeleton skeleton-block" style="height: 44px; border-radius: 4px;"></div>`;
+    }
+
+    // Financial summary skeleton (status strip + metric grid)
+    const finSummary = document.getElementById('financialSummary');
+    if (finSummary) {
+      finSummary.style.display = 'flex';
+      finSummary.innerHTML = `
+        <div class="skeleton skeleton-block" style="height: 96px; border-radius: 6px; margin-bottom: 12px;"></div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;">
+          <div class="skeleton-card" style="padding: 16px;"><div class="skeleton skeleton-block" style="width: 40%;"></div><div class="skeleton skeleton-val"></div></div>
+          <div class="skeleton-card" style="padding: 16px;"><div class="skeleton skeleton-block" style="width: 40%;"></div><div class="skeleton skeleton-val"></div></div>
+          <div class="skeleton-card" style="padding: 16px;"><div class="skeleton skeleton-block" style="width: 55%;"></div><div class="skeleton skeleton-val"></div></div>
+          <div class="skeleton-card" style="padding: 16px;"><div class="skeleton skeleton-block" style="width: 55%;"></div><div class="skeleton skeleton-val"></div></div>
         </div>
       `;
     }
@@ -499,30 +482,142 @@ export const prerender = false;
   }
 
   function restoreSummaryCards() {
-    const summaryGrid = document.getElementById('summaryGrid');
-    if (!summaryGrid) return;
-    summaryGrid.innerHTML = `
-      <div class="summary-card">
-        <div class="label">Income</div>
-        <div class="val green" id="sumIncomeZar">—</div>
-        <div class="note" id="sumIncomeNote">Set income above</div>
+    // Reconciliation bar — shell rendered; content filled in refreshTotals()
+    const reconcBar = document.getElementById('reconcBar');
+    if (reconcBar) {
+      reconcBar.style.display = 'block';
+      reconcBar.innerHTML = '';
+    }
+
+    // Financial summary: primary status + secondary metric grid
+    const finSummary = document.getElementById('financialSummary');
+    if (finSummary) {
+      finSummary.style.display = 'flex';
+      finSummary.innerHTML = `
+        <div id="finStatusBanner" class="fin-status-banner fin-status-ok" aria-live="polite">
+          <div class="fin-status-headline" id="finPrimaryHeadline"></div>
+          <div class="fin-status-detail" id="finPrimaryDetail" style="display: none;"></div>
+          <p class="fin-status-support" id="finPrimarySupport" hidden></p>
+        </div>
+        <div class="fin-summary fin-metrics-grid">
+          <div class="fin-cell">
+            <div class="label">Spent</div>
+            <div class="fin-val fin-val-secondary" id="finSpent">—</div>
+          </div>
+          <div class="fin-cell">
+            <div class="label">Budget</div>
+            <div class="fin-val fin-val-secondary" id="finBudget">—</div>
+          </div>
+          <div class="fin-cell fin-cell-planning">
+            <div class="fin-planning-tag">Planning metric</div>
+            <div class="label label-planning" id="finBudgetRemainingLabel">Planned underspend</div>
+            <div class="fin-val fin-val-planning" id="finBudgetRemaining">—</div>
+          </div>
+          <div class="fin-cell">
+            <div class="label">Cash left after spending</div>
+            <div class="fin-val fin-val-secondary" id="finCashRemaining">—</div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // ─── Monthly Category Insights ────────────────────────────────────────────
+
+  function renderMonthlyInsights(cashRemaining: number, budgetRemaining: number) {
+    const section = document.getElementById('insightsSection');
+    const list    = document.getElementById('insightsList');
+    if (!section || !list) return;
+
+    const fmt = (n: number) => formatCurrency(n, userCurrency);
+
+    type InsightItem = { priority: number; type: 'critical' | 'warning' | 'good'; html: string };
+    const items: InsightItem[] = [];
+
+    // ── Combined cash-vs-budget insight (highest priority) ────────────────
+    const hasCashData = (carriedOver !== 0 || totalIncome !== 0);
+    if (hasCashData) {
+      if (budgetRemaining > 0 && cashRemaining < 0) {
+        items.push({
+          priority: 0,
+          type: 'critical',
+          html: `You spent less than planned, but exceeded your available cash by <strong>${fmt(Math.abs(cashRemaining))}</strong>`,
+        });
+      } else if (budgetRemaining < 0 && cashRemaining > 0) {
+        items.push({
+          priority: 0,
+          type: 'warning',
+          html: `You're <strong>${fmt(Math.abs(budgetRemaining))}</strong> over budget, but you still have <strong>${fmt(cashRemaining)}</strong> cash available`,
+        });
+      } else if (budgetRemaining < 0 && cashRemaining < 0) {
+        items.push({
+          priority: 0,
+          type: 'critical',
+          html: `Over budget by <strong>${fmt(Math.abs(budgetRemaining))}</strong> and cash is <strong>${fmt(Math.abs(cashRemaining))}</strong> in the red`,
+        });
+      }
+    }
+
+    // ── Category-level insights ───────────────────────────────────────────
+    for (const row of zarData) {
+      if (row.budget <= 0) continue;
+      const variance = row.actual - row.budget;
+      const pct      = row.actual / row.budget;
+
+      if (variance > 0) {
+        items.push({
+          priority: 1,
+          type: 'critical',
+          html: `
+            <span class="insight-cat">${row.cat}</span>
+            over budget by <strong>${fmt(variance)}</strong>
+            <span class="insight-meta">(${fmt(row.actual)} spent of ${fmt(row.budget)} budget)</span>
+          `,
+        });
+      } else if (!row.fixed) {
+        // Pace / utilization hints assume variable spend — fixed bills hitting plan is normal
+        if (pct >= 0.85) {
+          const left = row.budget - row.actual;
+          items.push({
+            priority: 2,
+            type: 'warning',
+            html: `
+              <span class="insight-cat">${row.cat}</span>
+              close to limit — only <strong>${fmt(left)}</strong> left
+              <span class="insight-meta">(${Math.round(pct * 100)}% used)</span>
+            `,
+          });
+        } else if (pct <= 0.5 && row.actual > 0) {
+          items.push({
+            priority: 3,
+            type: 'good',
+            html: `
+              <span class="insight-cat">${row.cat}</span>
+              well within budget — <strong>${fmt(row.budget - row.actual)}</strong> remaining
+              <span class="insight-meta">(${Math.round(pct * 100)}% used)</span>
+            `,
+          });
+        }
+      }
+    }
+
+    // Sort by priority, trim to 5
+    items.sort((a, b) => a.priority - b.priority);
+    const top = items.slice(0, 5);
+
+    if (top.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    list.innerHTML = top.map(item => `
+      <div class="insight-row insight-${item.type}">
+        <span class="insight-dot insight-dot-${item.type}"></span>
+        <span class="insight-text">${item.html}</span>
       </div>
-      <div class="summary-card">
-        <div class="label">Budget</div>
-        <div class="val" id="sumBudgetZar">—</div>
-        <div class="note" id="sumNoteZar">Set budgets below</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">Actual</div>
-        <div class="val" id="sumActualZar">—</div>
-        <div class="note" id="sumVarianceZar">—</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">Var</div>
-        <div class="val" id="sumNetZar">—</div>
-        <div class="note" id="sumNetNote">Income - Actual</div>
-      </div>
-    `;
+    `).join('');
+
+    section.style.display = 'block';
   }
 
   async function loadMonth() {
@@ -534,8 +629,7 @@ export const prerender = false;
       const { data: zarCategories, error: catError } = await supabase
         .from('categories')
         .select('*')
-        .order('category_group', { ascending: true, nullsFirst: false })
-        .order('type', { ascending: false })
+        .order('sort_order', { ascending: true, nullsFirst: false })
         .order('name', { ascending: true });
 
       if (catError) {
@@ -609,7 +703,7 @@ export const prerender = false;
         .maybeSingle();
 
       if (prevBalance && prevBalance.ending_balance !== null) {
-        carriedOver = parseFloat(prevBalance.ending_balance || 0);
+        carriedOver = parseFloat(prevBalance.ending_balance);
       } else {
         carriedOver = 0;
         const prevMonthName = prevMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -619,14 +713,14 @@ export const prerender = false;
       // Auto-fill starting balance from previous month's ending balance
       const startBalanceInput = document.getElementById('zarStartBalance') as HTMLInputElement | null;
       if (startBalanceInput) {
-        startBalanceInput.value = carriedOver > 0 ? carriedOver.toString() : '';
+        startBalanceInput.value = carriedOver !== 0 ? carriedOver.toString() : '';
       }
 
       // Save it to monthly_balances if it differs from what's already there
-      if (carriedOver > 0) {
+      if (carriedOver !== 0) {
         const { data: currentBalance } = await supabase
           .from('monthly_balances')
-          .select('starting_balance')
+          .select('starting_balance, ending_balance')
           .eq('month', currentMonth)
           .eq('user_id', user?.id)
           .maybeSingle();
@@ -637,7 +731,7 @@ export const prerender = false;
             month: currentMonth,
             currency: userCurrency,
             starting_balance: carriedOver,
-            ending_balance: null,
+            ending_balance: currentBalance?.ending_balance ?? null,
             user_id: user?.id
           }, { onConflict: 'month,currency,user_id' });
         }
@@ -747,7 +841,7 @@ export const prerender = false;
       const { data: cats } = await supabase
         .from('categories')
         .select('id, name')
-        .order('category_group', { ascending: true, nullsFirst: false })
+        .order('sort_order', { ascending: true, nullsFirst: false })
         .order('name', { ascending: true });
       importedTxCategories = (cats || []).map(c => ({ id: c.id as string, name: c.name as string }));
     }
@@ -928,13 +1022,13 @@ export const prerender = false;
           ${groupName}
         </td>
         <td style="text-align:right; padding-top: 16px; padding-bottom: 8px;">
-          <span style="font-weight: 600; color: var(--text);">${formatCurrency(Math.round(groupBudget), userCurrency)}</span>
+          <span style="font-weight: 600; color: var(--text);">${formatCurrency(groupBudget, userCurrency)}</span>
         </td>
         <td style="text-align:right; padding-top: 16px; padding-bottom: 8px;">
-          <span style="font-weight: 600; color: var(--text);">${formatCurrency(Math.round(groupActual), userCurrency)}</span>
+          <span style="font-weight: 600; color: var(--text);">${formatCurrency(groupActual, userCurrency)}</span>
         </td>
         <td class="budget-val ${groupVarianceClass}" style="text-align:right; padding-top: 16px; padding-bottom: 8px; font-weight: 600;">
-          ${formatCurrency(Math.round(Math.abs(groupVariance)), userCurrency)}
+          ${formatCurrency(Math.abs(groupVariance), userCurrency)}
         </td>
       `;
       tbody.appendChild(groupHeader);
@@ -966,7 +1060,7 @@ export const prerender = false;
                 <input class="budget-input-dark" type="number" value="${row.actual}" data-id="${row.id}" data-currency="${userCurrency}" data-type="actual" onchange="onActualChange('${row.id}', this, '${userCurrency}')" onblur="onActualChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
               </div>
             </td>
-            <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</td>
+            <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.abs(variance), userCurrency)}</td>
           `;
           tbody.appendChild(tr);
         });
@@ -997,7 +1091,7 @@ export const prerender = false;
             <input class="budget-input-dark" type="number" value="${row.actual}" data-id="${row.id}" data-currency="${userCurrency}" data-type="actual" onchange="onActualChange('${row.id}', this, '${userCurrency}')" onblur="onActualChange('${row.id}', this, '${userCurrency}')" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; width: 80px; text-align: right; padding: 4px 8px; border-radius: 4px; outline: none;">
           </div>
         </td>
-        <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.round(Math.abs(variance)), userCurrency)}</td>
+        <td class="budget-val ${varianceClass}" style="text-align:right;">${formatCurrency(Math.abs(variance), userCurrency)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1184,8 +1278,8 @@ export const prerender = false;
     // Update carried over display
     const carriedOverEl = document.getElementById('carriedOverDisplay');
     if (carriedOverEl) {
-      carriedOverEl.textContent = carriedOver > 0
-        ? formatCurrency(Math.round(carriedOver), userCurrency)
+      carriedOverEl.textContent = carriedOver !== 0
+        ? formatCurrency(carriedOver, userCurrency)
         : '—';
     }
   }
@@ -1301,7 +1395,7 @@ export const prerender = false;
   }
 
   async function updateBalance(currency: string, type: string, value: string) {
-    const val = parseFloat(value) || null;
+    const val = value !== '' ? parseFloat(value) : null;
     const { data: { user } } = await supabase.auth.getUser();
     
     try {
@@ -1316,17 +1410,44 @@ export const prerender = false;
       const updateData = {
         month: currentMonth,
         currency: userCurrency,
-        starting_balance: type === 'start' ? val : (existing?.starting_balance || null),
-        ending_balance: type === 'end' ? val : (existing?.ending_balance || null),
+        starting_balance: type === 'start' ? val : (existing?.starting_balance ?? null),
+        ending_balance: type === 'end' ? val : (existing?.ending_balance ?? null),
         user_id: user?.id
       };
       
       await supabase.from('monthly_balances').upsert(updateData, {
         onConflict: 'month,currency,user_id'
       });
+
+      // When the ending balance is saved, auto-propagate it to the next month's
+      // starting balance — but only if the next month doesn't already have one set.
+      if (type === 'end' && val !== null) {
+        const nextMonthDate = new Date(currentMonth);
+        nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+        const nextMonth = nextMonthDate.toISOString().slice(0, 7) + '-01';
+
+        const { data: nextBalance } = await supabase
+          .from('monthly_balances')
+          .select('starting_balance, ending_balance')
+          .eq('month', nextMonth)
+          .eq('user_id', user?.id)
+          .maybeSingle();
+
+        if (!nextBalance || nextBalance.starting_balance === null) {
+          await supabase.from('monthly_balances').upsert({
+            month: nextMonth,
+            currency: userCurrency,
+            starting_balance: val,
+            ending_balance: nextBalance?.ending_balance ?? null,
+            user_id: user?.id
+          }, { onConflict: 'month,currency,user_id' });
+        }
+      }
     } catch (error) {
       console.error('Error updating balance:', error);
     }
+
+    refreshTotals();
   }
 
   function changeMonth(direction: number) {
@@ -1360,56 +1481,106 @@ export const prerender = false;
     const zarBudgetTotal = zarBudgets.reduce((a: number, b: number) => a+b, 0);
     const zarActualTotal = zarActuals.reduce((a: number, b: number) => a+b, 0);
     const zarVariance = zarActualTotal - zarBudgetTotal;
-    const zarNet = totalIncome + carriedOver - zarActualTotal;
+
+    const calculatedEnding = carriedOver + totalIncome - zarActualTotal;
+    const actualEndingInput = document.getElementById('zarEndBalance') as HTMLInputElement | null;
+    const actualEnding = parseFloat(actualEndingInput?.value || '0') || 0;
+    const reconcVariance = Math.round((calculatedEnding - actualEnding) * 100) / 100;
 
     // Update totals
     const zarTotalBudgetEl = document.getElementById('zarTotalBudget');
     const zarTotalActualEl = document.getElementById('zarTotalActual');
     const zarTotalVarianceEl = document.getElementById('zarTotalVariance');
     
-    if (zarTotalBudgetEl) zarTotalBudgetEl.textContent = formatCurrency(Math.round(zarBudgetTotal), userCurrency);
-    if (zarTotalActualEl) zarTotalActualEl.textContent = formatCurrency(Math.round(zarActualTotal), userCurrency);
+    if (zarTotalBudgetEl) zarTotalBudgetEl.textContent = formatCurrency(zarBudgetTotal, userCurrency);
+    if (zarTotalActualEl) zarTotalActualEl.textContent = formatCurrency(zarActualTotal, userCurrency);
     if (zarTotalVarianceEl) {
-      zarTotalVarianceEl.textContent = formatCurrency(Math.round(Math.abs(zarVariance)), userCurrency);
+      zarTotalVarianceEl.textContent = formatCurrency(Math.abs(zarVariance), userCurrency);
       zarTotalVarianceEl.className = 'budget-val ' + (zarVariance > 0 ? 'over' : 'ok');
     }
 
-    // Update summary cards
-    const sumIncomeZarEl = document.getElementById('sumIncomeZar');
-    const sumBudgetZarEl = document.getElementById('sumBudgetZar');
-    const sumActualZarEl = document.getElementById('sumActualZar');
-    const sumVarianceZarEl = document.getElementById('sumVarianceZar');
-    const sumNetZarEl = document.getElementById('sumNetZar');
-    const sumNetNoteEl = document.getElementById('sumNetNote');
-    
-    if (sumIncomeZarEl) sumIncomeZarEl.textContent = formatCurrency(Math.round(totalIncome + carriedOver), userCurrency);
-    
-    const sumIncomeNoteEl = document.getElementById('sumIncomeNote');
-    if (sumIncomeNoteEl) {
-      sumIncomeNoteEl.textContent = carriedOver > 0
-        ? `${formatCurrency(Math.round(totalIncome), userCurrency)} income + ${formatCurrency(Math.round(carriedOver), userCurrency)} carried over`
-        : 'Total income this month';
+    // ── Reconciliation status bar ─────────────────────────────────────────
+    const reconcBar = document.getElementById('reconcBar');
+    if (reconcBar) {
+      if (reconcVariance === 0) {
+        reconcBar.className = 'recon-bar recon-ok';
+        reconcBar.innerHTML = `<span class="recon-icon">&#10003;</span> All transactions accounted for`;
+      } else {
+        const sym = getCurrencySymbol(userCurrency);
+        reconcBar.className = 'recon-bar recon-err';
+        reconcBar.innerHTML = `<span class="recon-icon">&#10005;</span> ${formatCurrency(Math.abs(reconcVariance), userCurrency)} mismatch — you may be missing a transaction`;
+      }
+      reconcBar.style.display = 'flex';
     }
-    if (sumBudgetZarEl) sumBudgetZarEl.textContent = formatCurrency(Math.round(zarBudgetTotal), userCurrency);
-    if (sumActualZarEl) sumActualZarEl.textContent = formatCurrency(Math.round(zarActualTotal), userCurrency);
-    if (sumVarianceZarEl) {
-      const varianceFormatted = formatCurrency(Math.round(Math.abs(zarVariance)), userCurrency);
-      sumVarianceZarEl.textContent = zarVariance >= 0 
-        ? `+${varianceFormatted} over` 
-        : `${varianceFormatted} under`;
-      sumVarianceZarEl.style.color = zarVariance > 0 ? 'var(--red)' : 'var(--accent)';
+
+    // ── Financial summary block ───────────────────────────────────────────
+    const budgetRemaining = zarBudgetTotal - zarActualTotal;
+    // cashRemaining = money you actually have left (starting balance + income – spend)
+    const cashRemaining   = carriedOver + totalIncome - zarActualTotal;
+
+    const overspent = cashRemaining < 0;
+
+    const finSpentEl               = document.getElementById('finSpent');
+    const finBudgetEl              = document.getElementById('finBudget');
+    const finBudgetRemainingEl     = document.getElementById('finBudgetRemaining');
+    const finBudgetRemainingLabel  = document.getElementById('finBudgetRemainingLabel');
+    const finCashRemainingEl       = document.getElementById('finCashRemaining');
+    const finStatusBanner          = document.getElementById('finStatusBanner');
+    const finPrimaryHeadline       = document.getElementById('finPrimaryHeadline');
+    const finPrimaryDetail         = document.getElementById('finPrimaryDetail');
+    const finPrimarySupport        = document.getElementById('finPrimarySupport');
+
+    if (finPrimaryHeadline && finPrimaryDetail && finPrimarySupport && finStatusBanner) {
+      if (overspent) {
+        finStatusBanner.className = 'fin-status-banner fin-status-overspent';
+        finPrimaryHeadline.textContent = 'You ran out of money this month';
+        finPrimaryDetail.style.display = 'block';
+        finPrimaryDetail.textContent =
+          `You overspent your available cash by ${formatCurrency(Math.abs(cashRemaining), userCurrency)}`;
+        if (budgetRemaining > 0 && cashRemaining < 0) {
+          finPrimarySupport.hidden = false;
+          finPrimarySupport.textContent =
+            'You spent less than planned, but your starting balance was not enough to cover your spending.';
+        } else {
+          finPrimarySupport.hidden = true;
+          finPrimarySupport.textContent = '';
+        }
+      } else {
+        finStatusBanner.className = 'fin-status-banner fin-status-ok';
+        finPrimaryHeadline.textContent = 'You stayed within your available cash';
+        finPrimaryDetail.style.display = 'none';
+        finPrimaryDetail.textContent = '';
+        finPrimarySupport.hidden = true;
+        finPrimarySupport.textContent = '';
+      }
     }
-    if (sumNetZarEl) {
-      sumNetZarEl.textContent = formatCurrency(Math.round(Math.abs(zarNet)), userCurrency);
-      sumNetZarEl.className = 'val ' + (zarNet >= 0 ? 'green' : 'red');
+
+    if (finSpentEl)  finSpentEl.textContent = formatCurrency(zarActualTotal, userCurrency);
+    if (finBudgetEl) finBudgetEl.textContent = formatCurrency(zarBudgetTotal, userCurrency);
+
+    if (finBudgetRemainingEl) {
+      finBudgetRemainingEl.textContent = formatCurrency(Math.abs(budgetRemaining), userCurrency);
+      finBudgetRemainingEl.className =
+        'fin-val fin-val-planning ' +
+        (budgetRemaining < 0 ? 'fin-over' : budgetRemaining === 0 ? '' : 'fin-ok');
     }
-    if (sumNetNoteEl) {
-      const netFormatted = formatCurrency(Math.round(Math.abs(zarNet)), userCurrency);
-      sumNetNoteEl.textContent = zarNet >= 0 
-        ? `Surplus: ${netFormatted}` 
-        : `Deficit: ${netFormatted}`;
-      sumNetNoteEl.style.color = zarNet >= 0 ? 'var(--accent)' : 'var(--red)';
+    if (finBudgetRemainingLabel) {
+      finBudgetRemainingLabel.textContent =
+        budgetRemaining < 0 ? 'Beyond planned spend' : 'Planned underspend';
     }
+
+    if (finCashRemainingEl) {
+      finCashRemainingEl.textContent = formatCurrency(Math.abs(cashRemaining), userCurrency);
+      finCashRemainingEl.className =
+        'fin-val fin-val-secondary ' +
+        (cashRemaining < 0 ? 'fin-over' : cashRemaining === 0 ? '' : 'fin-ok');
+    }
+
+    const finSummary = document.getElementById('financialSummary');
+    if (finSummary) finSummary.style.display = 'flex';
+
+    // ── Monthly category insights ─────────────────────────────────────────
+    renderMonthlyInsights(cashRemaining, budgetRemaining);
 
     // Update ZAR to GBP conversion
     updateZarToGbpConversion();
@@ -1478,10 +1649,10 @@ export const prerender = false;
     const budgetConvAmountEl = document.getElementById('budgetConvAmount');
     
     if (zarBudgetEl) {
-      zarBudgetEl.textContent = Math.round(zarBudgetTotal).toLocaleString();
+      zarBudgetEl.textContent = zarBudgetTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     if (budgetBaseAmountEl) {
-      budgetBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarBudgetForConversion">${Math.round(zarBudgetTotal).toLocaleString()}</span>`;
+      budgetBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarBudgetForConversion">${zarBudgetTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`;
     }
     if (zarBudgetGbpEl && exchangeRate > 0) {
       const converted = zarBudgetTotal * exchangeRate;
@@ -1499,10 +1670,10 @@ export const prerender = false;
     const actualConvAmountEl = document.getElementById('actualConvAmount');
     
     if (zarActualEl) {
-      zarActualEl.textContent = Math.round(zarActualTotal).toLocaleString();
+      zarActualEl.textContent = zarActualTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     if (actualBaseAmountEl) {
-      actualBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarActualForConversion">${Math.round(zarActualTotal).toLocaleString()}</span>`;
+      actualBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarActualForConversion">${zarActualTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`;
     }
     if (zarActualGbpEl && exchangeRate > 0) {
       const converted = zarActualTotal * exchangeRate;
@@ -1520,10 +1691,10 @@ export const prerender = false;
     const netConvAmountEl = document.getElementById('netConvAmount');
     
     if (zarNetEl) {
-      zarNetEl.textContent = Math.round(zarNetTotal).toLocaleString();
+      zarNetEl.textContent = zarNetTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     if (netBaseAmountEl) {
-      netBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarNetForConversion">${Math.round(zarNetTotal).toLocaleString()}</span>`;
+      netBaseAmountEl.innerHTML = `${baseSymbol}<span id="zarNetForConversion">${zarNetTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`;
     }
     if (zarNetGbpEl && exchangeRate > 0) {
       const converted = zarNetTotal * exchangeRate;
@@ -1699,5 +1870,170 @@ export const prerender = false;
     vertical-align: middle;
   }
   .tag.ok { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Reconciliation Status Bar ─────────────────────────────────────── */
+  .recon-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 20px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    margin-bottom: 28px;
+    border: 1px solid transparent;
+  }
+  .recon-ok {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+    color: var(--accent);
+  }
+  .recon-err {
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+    border-color: color-mix(in srgb, var(--red) 30%, transparent);
+    color: var(--red);
+  }
+  .recon-icon {
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  /* ── Financial Summary Block ───────────────────────────────────────── */
+  .fin-summary-wrap {
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 40px;
+  }
+  .fin-status-banner {
+    border-radius: 6px;
+    padding: 22px 26px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+  }
+  .fin-status-ok {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .fin-status-overspent {
+    background: color-mix(in srgb, var(--red) 14%, transparent);
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  }
+  .fin-status-headline {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  .fin-status-ok .fin-status-headline {
+    color: var(--accent);
+  }
+  .fin-status-overspent .fin-status-headline {
+    color: var(--red);
+  }
+  .fin-status-detail {
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    font-weight: 500;
+    margin-top: 10px;
+    letter-spacing: 0.02em;
+    color: var(--red);
+  }
+  .fin-status-support {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-dim);
+    margin: 14px 0 0 0;
+    max-width: 52ch;
+  }
+  .fin-summary.fin-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  @media (max-width: 700px) {
+    .fin-summary.fin-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .fin-cell {
+    background: var(--surface);
+    padding: 18px 20px;
+  }
+  .fin-cell-planning {
+    background: var(--surface2);
+    padding-top: 14px;
+  }
+  .fin-planning-tag {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .fin-cell .label.label-planning {
+    font-size: 11px;
+  }
+  .fin-val {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 300;
+    color: var(--text);
+    margin-top: 6px;
+  }
+  .fin-val-secondary {
+    font-size: 22px;
+  }
+  .fin-val-planning {
+    font-size: 18px;
+    margin-top: 4px;
+  }
+  .fin-val.fin-ok   { color: var(--accent); }
+  .fin-val.fin-over { color: var(--red); }
+
+  /* ── Insights Section ──────────────────────────────────────────────── */
+  .insight-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .insight-critical { border-left: 3px solid var(--red); }
+  .insight-warning  { border-left: 3px solid var(--accent2); }
+  .insight-good     { border-left: 3px solid var(--accent); }
+
+  .insight-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .insight-dot-critical { background: var(--red); }
+  .insight-dot-warning  { background: var(--accent2); }
+  .insight-dot-good     { background: var(--accent); }
+
+  .insight-text { flex: 1; color: var(--text-dim); }
+  .insight-text strong { color: var(--text); font-weight: 500; }
+  .insight-cat {
+    color: var(--text);
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .insight-meta {
+    color: var(--muted);
+    font-size: 11px;
+    margin-left: 4px;
+  }
 </style>
 </html>
