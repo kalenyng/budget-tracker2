@@ -4,10 +4,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Trim whitespace/newlines. Default `auto`: no path redirects — client `viewport-guard.js`
   // sends narrow viewports from desktop paths to /mobile-*.
   // Set PUBLIC_SITE_MODE=mobile for a mobile-only deploy (everything else -> mobile-dashboard).
-  // Do not redirect /mobile-* away on "desktop": that used to 307 to / and caused an infinite
-  // loop with viewport-guard (narrow / -> /mobile-dashboard -> 307 / -> ...).
+  // `desktop` is treated as auto (legacy; removing the env var from the host is fine).
   const raw = (import.meta.env.PUBLIC_SITE_MODE ?? 'auto').trim();
-  const mode = raw === '' ? 'auto' : raw;
+  const mode =
+    raw === '' || raw === 'auto' || raw === 'desktop' ? 'auto' : raw;
   const pathname = context.url.pathname;
 
   const isMobileRoute = pathname.startsWith('/mobile');
