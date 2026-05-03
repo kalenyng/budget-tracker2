@@ -1,9 +1,41 @@
 /**
  * Routes by viewport width (max-width 767px = mobile shell).
  * Use PUBLIC_SITE_MODE=auto (or unset) in production so middleware does not override paths.
+ *
+ * Wide viewports normally leave /mobile-* for the desktop app. To stay on the mobile shell
+ * (e.g. testing on a laptop), open once with ?mobile=1 or append it to the URL; preference
+ * is stored in sessionStorage until you use ?mobile=0 on a mobile route.
  */
 (function () {
   var MAX_MOBILE_PX = 767;
+  var MOBILE_SHELL_STORAGE_KEY = 'budgetAppMobileShell';
+
+  function prefersMobileShellOnWideViewport() {
+    try {
+      var params = new URLSearchParams(window.location.search || '');
+      var flag = params.get('mobile');
+      if (flag === '1') {
+        sessionStorage.setItem(MOBILE_SHELL_STORAGE_KEY, '1');
+        params.delete('mobile');
+        var qs = params.toString();
+        var next = window.location.pathname + (qs ? '?' + qs : '') + (window.location.hash || '');
+        var cur = window.location.pathname + window.location.search + (window.location.hash || '');
+        if (next !== cur) {
+          window.history.replaceState(null, '', next);
+        }
+        return true;
+      }
+      if (flag === '0') {
+        sessionStorage.removeItem(MOBILE_SHELL_STORAGE_KEY);
+        return false;
+      }
+    } catch (e) {}
+    try {
+      return sessionStorage.getItem(MOBILE_SHELL_STORAGE_KEY) === '1';
+    } catch (e2) {
+      return false;
+    }
+  }
 
   function isNarrow() {
     return window.matchMedia('(max-width: ' + MAX_MOBILE_PX + 'px)').matches;
@@ -46,6 +78,7 @@
     }
 
     if (!narrow && isMobilePath(p)) {
+      if (prefersMobileShellOnWideViewport()) return;
       var d = desktopTargetForMobilePath(p);
       if (normalizePath(window.location.pathname) !== normalizePath(d)) {
         window.location.replace(d + q);
