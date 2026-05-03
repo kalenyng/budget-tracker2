@@ -1,0 +1,59 @@
+---
+interface Props {
+  variant: 'fy' | 'month';
+}
+
+const { variant } = Astro.props;
+---
+
+<div class="step-control">
+  {
+    variant === 'fy' ? (
+      <>
+        <button
+          type="button"
+          class="step-control-btn step-control-btn-prev"
+          onclick="changeFY(-1)"
+          onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'"
+          onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'"
+        >
+          ‹
+        </button>
+        <div id="yearLabel" class="step-control-label" style="min-width: 100px;">
+        </div>
+        <button
+          type="button"
+          class="step-control-btn step-control-btn-next"
+          onclick="changeFY(1)"
+          onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'"
+          onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'"
+        >
+          ›
+        </button>
+      </>
+    ) : (
+      <>
+        <button
+          type="button"
+          class="step-control-btn step-control-btn-prev"
+          onclick="changeMonth(-1)"
+          onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'"
+          onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'; this.nextElementSibling.style.borderColor='var(--border)'"
+        >
+          ‹
+        </button>
+        <div id="monthDisplay" class="step-control-label" style="min-width: 130px; cursor: default;">
+        </div>
+        <button
+          type="button"
+          class="step-control-btn step-control-btn-next"
+          onclick="changeMonth(1)"
+          onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'"
+          onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'"
+        >
+          ›
+        </button>
+      </>
+    )
+  }
+</div>

@@ -22,7 +22,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // Desktop deployment: redirect mobile routes to home
+  // Desktop deployment: all /mobile-* routes (including /mobile-sort) redirect to home.
+  // Never send desktop traffic to mobile-only surfaces.
   if (mode === 'desktop') {
     if (isMobileRoute) {
       return context.redirect('/', 307);

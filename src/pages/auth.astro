@@ -8,11 +8,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In - Budget Tracker</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles/global.css" />
 </head>
 <body>
 <div class="page">
-
+  <main class="auth-stack">
   <header>
     <div class="label">Authentication</div>
     <h1>Budget<span> Tracker</span></h1>
@@ -68,6 +72,7 @@
       <div id="signUpSuccess" class="success-message"></div>
     </div>
   </div>
+  </main>
 
   <footer>Budget Tracker · Personal finance tracking</footer>
 
@@ -218,43 +223,33 @@
 </script>
 
 <style is:global>
-  :root {
-    --bg: #0d0f0e;
-    --surface: #151815;
-    --surface2: #1c201b;
-    --border: #2a2f28;
-    --accent: #c8f560;
-    --accent2: #f5c842;
-    --red: #f56060;
-    --muted: #5a6358;
-    --text: #d8e0d4;
-    --text-dim: #8a9688;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  html, body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
+  body {
+    padding: 0;
     min-height: 100vh;
     min-height: 100dvh;
   }
 
   .page {
     width: 100%;
-    max-width: 26rem;
-    margin: 0 auto;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
-    padding-top: max(1.5rem, env(safe-area-inset-top));
     padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .auth-stack {
+    flex: 1;
+    width: 100%;
+    max-width: 26rem;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+    padding-bottom: 0.5rem;
   }
 
   header {
@@ -271,11 +266,11 @@
     margin-bottom: 8px;
   }
 
-  /* Narrow column: keep title proportional (vw was tied to full viewport) */
+  /* Title scales with column; cap grows on desktop */
   h1 {
-    font-family: 'Fraunces', serif;
+    font-family: var(--font-display), serif;
     font-size: clamp(1.85rem, 6vw, 2.35rem);
-    font-weight: 700;
+    font-weight: 400;
     line-height: 1.05;
     color: var(--text);
     letter-spacing: -0.02em;
@@ -292,33 +287,37 @@
   }
 
   .auth-container {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: clamp(1.25rem, 4vw, 2rem);
+    background: var(--surface-1);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    padding: clamp(1.35rem, 4vw, 2.15rem);
     margin-bottom: clamp(1.25rem, 4vw, 2rem);
     flex-shrink: 0;
   }
 
   .auth-tabs {
     display: flex;
-    gap: 8px;
+    gap: var(--space-3);
     margin-bottom: clamp(1.25rem, 4vw, 2rem);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-muted);
+    padding-bottom: var(--space-4);
   }
 
   .tab-btn {
     background: transparent;
     border: none;
     color: var(--text-dim);
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 12px;
-    padding: 8px 16px;
+    font-weight: 600;
+    min-height: 40px;
+    padding: 0 var(--space-4);
     cursor: pointer;
-    transition: all 0.15s;
+    transition:
+      color var(--transition-fast),
+      border-color var(--transition-fast);
     border-bottom: 2px solid transparent;
-    margin-bottom: -16px;
+    margin-bottom: calc(-1 * var(--space-4));
   }
 
   .tab-btn:hover {
@@ -353,19 +352,29 @@
 
   .auth-input {
     width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
+    background: var(--surface-2);
+    border: 1px solid var(--border-muted);
     color: var(--text);
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-ui);
     font-size: 13px;
-    padding: 12px;
-    border-radius: 4px;
-    transition: border-color 0.15s;
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-md);
+    transition:
+      border-color var(--transition-fast),
+      background var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  .auth-input:hover:not(:focus) {
+    border-color: color-mix(in srgb, var(--border) 55%, var(--text-dim));
   }
 
   .auth-input:focus {
     outline: none;
     border-color: var(--accent);
+    background: color-mix(in srgb, var(--surface-1) 25%, var(--surface-2));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
   }
 
   select.auth-input {
@@ -376,28 +385,35 @@
     margin-top: 4px;
     color: var(--muted);
     font-size: 10px;
+    opacity: 0.9;
   }
 
   .auth-btn {
     width: 100%;
     background: var(--accent);
-    border: 1px solid var(--accent);
-    color: #0d0f0e;
-    font-family: 'DM Mono', monospace;
+    border: 1px solid color-mix(in srgb, var(--accent) 88%, var(--border-muted));
+    color: var(--text-on-accent);
+    font-family: var(--font-ui);
     font-size: 12px;
-    font-weight: 500;
-    padding: 12px;
+    font-weight: 600;
+    min-height: 46px;
+    padding: 0 var(--space-5);
     cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
+    border-radius: var(--radius-md);
+    transition:
+      filter var(--transition-fast),
+      transform 120ms ease;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-top: 8px;
+    letter-spacing: 0.08em;
+    margin-top: var(--space-3);
   }
 
   .auth-btn:hover {
-    background: var(--accent2);
-    border-color: var(--accent2);
+    filter: brightness(1.06);
+  }
+
+  .auth-btn:active {
+    transform: scale(0.99);
   }
 
   .error-message {
@@ -415,19 +431,45 @@
   }
 
   footer {
-    margin-top: auto;
     flex-shrink: 0;
     color: var(--muted);
     font-size: 11px;
     text-align: center;
     padding-top: clamp(1rem, 3vw, 1.5rem);
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--border-muted);
   }
 
-  @media (min-width: 480px) and (min-height: 640px) {
-    .page {
-      justify-content: center;
-      padding-top: max(1rem, env(safe-area-inset-top));
+  @media (min-width: 640px) {
+    .auth-stack {
+      max-width: min(34rem, calc(100% - 2rem));
+    }
+
+    h1 {
+      font-size: clamp(2.1rem, 2.8vw, 2.75rem);
+    }
+
+    .subtitle {
+      font-size: 13px;
+    }
+
+    .auth-container {
+      padding: clamp(1.5rem, 3vw, 2.25rem);
+    }
+
+    .auth-input {
+      font-size: 14px;
+      padding: 14px;
+    }
+
+    .auth-btn {
+      font-size: 13px;
+      padding: 14px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .auth-stack {
+      max-width: min(38rem, calc(100% - 2rem));
     }
   }
 </style>

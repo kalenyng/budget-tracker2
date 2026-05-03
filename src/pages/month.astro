@@ -1,55 +1,37 @@
 ---
 // Main budget app page
+import DesktopLayout from '../layouts/DesktopLayout.astro';
+import PageTitle from '../components/PageTitle.astro';
+import StepControl from '../components/StepControl.astro';
 import { supabase } from '../lib/supabase';
 
 // Prevent pre-rendering so middleware can redirect
 export const prerender = false;
+
+const pathname = Astro.url.pathname;
 ---
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Budget Tracker</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles/global.css">
-  <script>
-    (function () {
-      const t = localStorage.getItem('theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', t);
-    })();
-  </script>
-</head>
-<body>
+<DesktopLayout title="Budget Tracker - Monthly" pathname={pathname}>
+  <div slot="toolbar-start">
+    <StepControl variant="month" />
+  </div>
 <div class="page">
 
-  <header>
-    <div class="label">Personal finance tracker</div>
-    <h1>Monthly<span> Tracker</span></h1>
-    <div class="subtitle">Set budgets and track actual spending</div>
-    
-    <!-- Navigation -->
-    <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-      <a href="/" class="currency-btn" style="text-decoration: none; display: inline-block;">← Yearly Overview</a>
-      <div style="display: flex; align-items: center; gap: 0; margin-left: 12px;">
-        <button onclick="changeMonth(-1)" style="background: var(--surface2); border: 1px solid var(--border); border-right: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 4px 0 0 4px; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'; this.nextElementSibling.style.borderColor='var(--border)'">‹</button>
-        <div id="monthDisplay" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 16px; min-width: 130px; text-align: center; cursor: default;"></div>
-        <button onclick="changeMonth(1)" style="background: var(--surface2); border: 1px solid var(--border); border-left: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 0 4px 4px 0; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">›</button>
-      </div>
-      <div id="currentUserEmail" style="margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Signed in user">Loading account...</div>
-      <button class="currency-btn" onclick="handleSignOut()" style="color: var(--red);" title="Sign Out">Sign Out</button>
-    </div>
-    
-  </header>
+  <PageTitle
+    label="Personal finance tracker"
+    titleBefore="Monthly"
+    titleAccent=" Tracker"
+    subtitle="Set budgets and track actual spending"
+  />
 
   <!-- Income Section -->
-  <div class="balance-section">
+  <div class="app-card">
     <div class="label">Monthly Income</div>
-    <div id="incomeSourcesList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
-      <!-- Income source rows rendered here by JS -->
-    </div>
-    <button onclick="addIncomeSource()" style="
+    <div class="nested-panel" style="margin-top: var(--space-5);">
+      <div id="incomeSourcesList" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Income source rows rendered here by JS -->
+      </div>
+      <button onclick="addIncomeSource()" style="
       margin-top: 12px;
       background: transparent;
       border: 1px dashed var(--border);
@@ -63,14 +45,16 @@ export const prerender = false;
       transition: all 0.15s;
     " onmouseover="this.style.borderColor='var(--accent)'; this.style.color='var(--accent)'"
        onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-dim)'">
-      + Add Income Source
-    </button>
+        + Add Income Source
+      </button>
+    </div>
   </div>
 
   <!-- Balance Tracking -->
-  <div class="balance-section">
+  <div class="app-card">
     <div class="label">Account Balances</div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px;">
+    <div class="nested-panel" style="margin-top: var(--space-5);">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
       <div>
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Starting Balance</label>
         <input type="number" id="zarStartBalance" placeholder="0" step="0.01" class="balance-input" onchange="updateBalance('ZAR', 'start', this.value)" onblur="updateBalance('ZAR', 'start', this.value)">
@@ -79,14 +63,15 @@ export const prerender = false;
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Ending Balance</label>
         <input type="number" id="zarEndBalance" placeholder="0" step="0.01" class="balance-input" onchange="updateBalance('ZAR', 'end', this.value)" onblur="updateBalance('ZAR', 'end', this.value)">
       </div>
-    </div>
-    <!-- Carried Over Balance (read-only) -->
-    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <label style="color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;">
-          Carried Over (from previous month)
-        </label>
-        <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent);" id="carriedOverDisplay">—</div>
+      </div>
+      <!-- Carried Over Balance (read-only) -->
+      <div style="margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--border-muted);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <label style="color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;">
+            Carried Over (from previous month)
+          </label>
+          <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent);" id="carriedOverDisplay">—</div>
+        </div>
       </div>
     </div>
   </div>
@@ -104,9 +89,10 @@ export const prerender = false;
   </div>
 
   <!-- Currency Conversion Summary -->
-  <div class="balance-section" id="currencyConversionSummary" style="margin-bottom: 48px; display: none;">
+  <div class="app-card" id="currencyConversionSummary" style="margin-bottom: 48px; display: none;">
     <div class="label" id="conversionLabel">Currency Conversion</div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px; margin-top: 16px;">
+    <div class="nested-panel" style="margin-top: var(--space-5);">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px;">
       <div>
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Exchange Rate</label>
         <div style="font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; color: var(--accent);">
@@ -129,6 +115,7 @@ export const prerender = false;
         <div id="netConvAmount" style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--accent);">£<span id="zarNetConvertedGbp">0</span></div>
         <div id="netBaseAmount" style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--text); margin-top: 4px;"><span id="netBaseSymbol">R</span><span id="zarNetForConversion">0</span></div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -179,9 +166,6 @@ export const prerender = false;
 
   <footer>
     Budget Tracker · Set budgets and track actual spending
-    <div style="margin-top: 12px;">
-      <a href="/mobile-sort" style="display: inline-block; background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; padding: 8px 18px; border-radius: 4px; text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--accent)';this.style.color='#0d0f0e'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--accent)'">⌖ Quick Sort</a>
-    </div>
   </footer>
 
 </div>
@@ -1738,19 +1722,6 @@ export const prerender = false;
 <style is:global>
   /* Page-specific styles for month.astro */
 
-  h1 {
-    font-family: 'Fraunces', serif;
-    font-size: clamp(36px, 6vw, 64px);
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text);
-    letter-spacing: -0.02em;
-  }
-
-  h1 span {
-    color: var(--accent);
-  }
-
   .currency-toggle {
     display: flex;
     gap: 8px;
@@ -2036,4 +2007,5 @@ export const prerender = false;
     margin-left: 4px;
   }
 </style>
-</html>
+
+</DesktopLayout>

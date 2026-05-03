@@ -1,0 +1,22 @@
+---
+interface Props {
+  label: string;
+  titleBefore: string;
+  /** Optional accented fragment after titleBefore (e.g. " Overview"). */
+  titleAccent?: string;
+  subtitle: string;
+}
+
+const { label, titleBefore, titleAccent = '', subtitle } = Astro.props;
+---
+
+<header>
+  <div class="label">{label}</div>
+  <h1 class="page-heading">
+    {titleBefore}{
+      titleAccent ? <span class="page-heading-accent">{titleAccent}</span> : null
+    }
+  </h1>
+  <div class="subtitle">{subtitle}</div>
+  <slot />
+</header>

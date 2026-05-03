@@ -1,92 +1,104 @@
 ---
 // Yearly overview page
+import DesktopLayout from '../layouts/DesktopLayout.astro';
+import PageTitle from '../components/PageTitle.astro';
+import StepControl from '../components/StepControl.astro';
 import { supabase } from '../lib/supabase';
-import MetricCard from '../components/MetricCard.astro';
-import InsightsPanel from '../components/InsightsPanel.astro';
 
 // Prevent pre-rendering so middleware can redirect
 export const prerender = false;
+
+const pathname = Astro.url.pathname;
 ---
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yearly Overview - Budget Tracker</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,700;1,9..144,300&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles/global.css">
-  <script>
-    (function () {
-      const t = localStorage.getItem('theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', t);
-    })();
-  </script>
-</head>
-<body>
+<DesktopLayout title="Yearly Overview - Budget Tracker" pathname={pathname}>
+  <div slot="toolbar-start">
+    <StepControl variant="fy" />
+  </div>
 <div class="page">
 
-  <header>
-    <div class="label">Personal finance tracker</div>
-    <h1>Yearly<span> Overview</span></h1>
-    <div class="subtitle">Financial year: April to March</div>
-    
-    <!-- Navigation -->
-    <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-      <a href="/month" class="currency-btn" style="text-decoration: none; display: inline-block;">Monthly Tracker</a>
-      <a href="/transactions" class="currency-btn" style="text-decoration: none; display: inline-block;">Transactions</a>
-      <a href="/mobile-sort" class="currency-btn" style="text-decoration: none; display: inline-block; color: var(--accent); border-color: var(--accent);">⌖ Quick Sort</a>
-      <a href="/settings" class="currency-btn" style="text-decoration: none; display: inline-block;">Settings</a>
-      <div style="display: flex; align-items: center; gap: 0; margin-left: 12px;">
-        <button onclick="changeFY(-1)" style="background: var(--surface2); border: 1px solid var(--border); border-right: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 4px 0 0 4px; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">‹</button>
-        <div id="yearLabel" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 16px; min-width: 100px; text-align: center;"></div>
-        <button onclick="changeFY(1)" style="background: var(--surface2); border: 1px solid var(--border); border-left: none; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px; padding: 6px 12px; cursor: pointer; border-radius: 0 4px 4px 0; transition: all 0.15s;" onmouseover="this.style.color='var(--accent)'; this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--border)'">›</button>
-      </div>
-      <div id="currentUserEmail" style="margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Signed in user">Loading account...</div>
-      <button class="currency-btn" onclick="handleSignOut()" style="color: var(--red);" title="Sign Out">Sign Out</button>
+  <PageTitle
+    label="Personal finance tracker"
+    titleBefore="Yearly"
+    titleAccent=" Overview"
+    subtitle="Financial year: April to March"
+  />
+
+  <!-- Top status (FY pace) -->
+  <div id="statusBanner" class="dash-status-bar" style="display: none;">
+    <span id="statusPip" class="dash-status-pip" aria-hidden="true"></span>
+    <span id="statusLabel" class="dash-status-title">—</span>
+    <span id="statusDetail" class="dash-status-meta"></span>
+  </div>
+
+  <!-- This month: three KPIs -->
+  <div class="dashboard-kpi-row" id="yearSummary">
+    <div class="dash-card dash-kpi-card">
+      <div class="dash-kpi-label">Left this month</div>
+      <div class="dash-kpi-value" id="kpiLeftVal">—</div>
+      <div class="dash-kpi-hint" id="kpiLeftHint"></div>
     </div>
-    
-  </header>
-
-  <!-- Status Banner -->
-  <div id="statusBanner" class="status-banner" style="display: none;">
-    <span id="statusIcon" class="status-icon"></span>
-    <span id="statusLabel" class="status-label">—</span>
-    <span id="statusDetail" class="status-detail"></span>
+    <div class="dash-card dash-kpi-card">
+      <div class="dash-kpi-label">Spent</div>
+      <div class="dash-kpi-value" id="kpiSpentVal">—</div>
+      <div class="dash-kpi-hint" id="kpiSpentHint"></div>
+    </div>
+    <div class="dash-card dash-kpi-card">
+      <div class="dash-kpi-label">Monthly budget</div>
+      <div class="dash-kpi-value" id="kpiBudgetVal">—</div>
+      <div class="dash-kpi-hint" id="kpiBudgetHint">Sum of category budgets</div>
+    </div>
   </div>
 
-  <!-- Decision Dashboard -->
-  <div class="summary-grid decision-grid" id="yearSummary" style="margin-bottom: 24px;">
-    <MetricCard
-      id="remainingBudget"
-      label="Remaining Budget"
-    />
-    <MetricCard
-      id="spend"
-      label="Spend vs Expected"
-      note="—"
-      variant="compare"
-    />
-    <MetricCard
-      id="burnRate"
-      label="Monthly Burn Rate"
-      note="Average monthly spend"
-    />
-    <MetricCard
-      id="projected"
-      label="Projected full-year spend"
-      subtitle="Predicted total for the financial year"
-      note="Based on current burn rate"
-    />
-  </div>
+  <div class="dashboard-split" id="dashboardSplit">
+    <div class="dash-card dash-panel">
+      <div class="dash-panel-head">
+        <h2 class="dash-panel-title">Recent transactions</h2>
+        <a class="dash-panel-link" href="/transactions">View all</a>
+      </div>
+      <div class="dash-table-wrap">
+        <table class="dash-tx-table" id="recentTxTable">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Description</th>
+              <th scope="col" class="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="recentTxBody">
+            <tr><td colspan="3" class="dash-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-  <!-- Problem Detection: Insights Panel -->
-  <InsightsPanel />
+    <div class="dash-right-stack">
+      <div class="dash-card dash-panel">
+        <div class="dash-panel-head">
+          <h2 class="dash-panel-title">Daily spend</h2>
+          <span class="dash-panel-meta" id="dailySpendMonthLabel"></span>
+        </div>
+        <div class="dash-bar-chart" id="dailySpendChart" aria-label="Daily spending for this month"></div>
+        <div class="dash-bar-labels" id="dailySpendLabels"></div>
+      </div>
+
+      <div class="dash-card dash-panel">
+        <div class="dash-panel-head">
+          <h2 class="dash-panel-title">Heads-up alerts</h2>
+        </div>
+        <section id="insightsPanel" class="dash-insights" style="display: none;" aria-label="Spending insights">
+          <div class="insights-list" id="insightsList"></div>
+        </section>
+        <p class="dash-empty dash-insights-empty" id="insightsEmpty">Nothing flagged for now.</p>
+      </div>
+    </div>
+  </div>
 
   <!-- Currency Conversion Summary -->
-  <div class="balance-section" id="zarToGbpSummary" style="margin-bottom: 48px; display: none;">
+  <div class="app-card" id="zarToGbpSummary" style="margin-bottom: 48px; display: none;">
     <div class="label" id="conversionLabel">Currency Conversion</div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px; margin-top: 16px;">
+    <div class="nested-panel" style="margin-top: var(--space-5);">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px;">
       <div>
         <label style="color: var(--text-dim); font-size: 10px; display: block; margin-bottom: 4px;">Exchange Rate</label>
         <div style="font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; color: var(--accent);">
@@ -109,27 +121,18 @@ export const prerender = false;
         <div style="font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--text);"><span id="yearNetZar">0</span></div>
         <div style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--accent); margin-top: 4px;"><span id="yearNetGbp">0</span></div>
       </div>
+      </div>
     </div>
   </div>
 
   <!-- Category Breakdown -->
   <div id="categoryBreakdown">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-      <div class="section-title" style="margin-bottom: 0;">Annual Category Breakdown</div>
-      <div class="chart-global-toggle" style="display: flex; gap: 4px; align-items: center;">
-        <span style="color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.04em; margin-right: 4px;">VIEW ALL AS</span>
-        <button class="chart-mode-btn active" onclick="window.switchAllChartMode('actual', this)">Actual</button>
-        <button class="chart-mode-btn" onclick="window.switchAllChartMode('burn', this)">Burn Rate</button>
-      </div>
-    </div>
-    <div id="categoriesContainer"></div>
+    <div class="section-title envelope-section-title">Annual envelopes</div>
+    <div id="categoriesContainer" class="envelope-grid"></div>
   </div>
 
   <footer>
     Budget Tracker · FY Overview
-    <div style="margin-top: 12px;">
-      <a href="/mobile-sort" style="display: inline-block; background: var(--surface2); border: 1px solid var(--accent); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; padding: 8px 18px; border-radius: 4px; text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--accent)';this.style.color='#0d0f0e'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--accent)'">⌖ Quick Sort</a>
-    </div>
   </footer>
 
 </div>
@@ -137,7 +140,7 @@ export const prerender = false;
 <div id="catModal" style="display:none; position:fixed; inset:0; z-index:9997; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);" onclick="closeCatModal(event)">
   <div id="catModalInner" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:32px; min-width:480px; max-width:640px; width:90%;">
     <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:24px;">
-      <h2 id="catModalName" style="font-family:'Fraunces',serif; font-size:24px; font-weight:300; font-style:italic; color:var(--text);"></h2>
+      <h2 id="catModalName" style="font-family: var(--font-display), serif; font-size:24px; font-weight:400; font-style:italic; color:var(--text);"></h2>
       <button onclick="closeCatModal()" style="background:transparent; border:none; color:var(--text-dim); font-family:'DM Mono',monospace; font-size:18px; cursor:pointer; padding:0 4px;">×</button>
     </div>
     <table id="catModalTable" style="width:100%; border-collapse:collapse;"></table>
@@ -145,9 +148,7 @@ export const prerender = false;
   </div>
 </div>
 
-<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">☀ Light</button>
-
-<div id="chartTooltip" style="position: fixed; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 4px; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 9998;"></div>
+<button type="button" class="theme-toggle" onclick="toggleTheme()" id="themeToggle" aria-label="Toggle color theme">Light</button>
 
 <script>
   import { supabase } from '../lib/supabase';
@@ -161,11 +162,12 @@ export const prerender = false;
   function applyTheme(theme: string) {
     document.documentElement.setAttribute('data-theme', theme);
     const btn = document.getElementById('themeToggle');
-    if (btn) btn.textContent = theme === 'light' ? '☾ Dark' : '☀ Light';
+    // Label = theme you switch *to* when clicked (matches month, transactions, settings).
+    if (btn) btn.textContent = theme === 'light' ? 'Dark' : 'Light';
   }
 
   function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme');
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
     const next = current === 'light' ? 'dark' : 'light';
     localStorage.setItem('theme', next);
     applyTheme(next);
@@ -232,10 +234,10 @@ export const prerender = false;
       toggleTheme: () => void;
       openCatModal: (categoryId: string) => void;
       closeCatModal: (event?: MouseEvent) => void;
-      switchChartMode: (button: HTMLButtonElement, catId: string, mode: 'actual' | 'burn') => void;
-      switchAllChartMode: (mode: 'actual' | 'burn', btn: HTMLButtonElement) => void;
     }
   }
+
+  type CategoryMonthActuals = Record<string, Record<string, number> >;
 
   // Default to current financial year start
   // If current month is Jan/Feb/Mar, financial year started last year
@@ -243,7 +245,7 @@ export const prerender = false;
   let currentYear = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
   let monthlyData: MonthlyData[] = [];
   let categoryData: CategoryData[] = [];
-  let categoryMonthlyActuals: Record<string, Record<string, number>> = {};
+  let categoryMonthlyActuals: CategoryMonthActuals = {};
   let exchangeRate = 0;
   let yearIncome = 0;
   let yearBudget = 0;
@@ -333,330 +335,258 @@ export const prerender = false;
     }
   }
 
+  function restoreDashboardKpiRow() {
+    const yearSummary = document.getElementById('yearSummary');
+    if (!yearSummary) return;
+    yearSummary.innerHTML = `
+    <div class="dash-card dash-kpi-card">
+      <div class="dash-kpi-label">Left this month</div>
+      <div class="dash-kpi-value" id="kpiLeftVal">—</div>
+      <div class="dash-kpi-hint" id="kpiLeftHint"></div>
+    </div>
+    <div class="dash-card dash-kpi-card">
+      <div class="dash-kpi-label">Spent</div>
+      <div class="dash-kpi-value" id="kpiSpentVal">—</div>
+      <div class="dash-kpi-hint" id="kpiSpentHint"></div>
+    </div>
+    <div class="dash-card dash-kpi-card">
+      <div class="dash-kpi-label">Monthly budget</div>
+      <div class="dash-kpi-value" id="kpiBudgetVal">—</div>
+      <div class="dash-kpi-hint" id="kpiBudgetHint">Sum of category budgets</div>
+    </div>`;
+  }
+
   function showSkeletons() {
-    // Hide status banner while loading
     const statusBanner = document.getElementById('statusBanner');
     if (statusBanner) statusBanner.style.display = 'none';
 
-    // Year summary cards skeleton
     const yearSummary = document.getElementById('yearSummary');
     if (yearSummary) {
       yearSummary.innerHTML = `
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 50%;"></div>
-        </div>
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 50%;"></div>
-        </div>
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 50%;"></div>
-        </div>
-        <div class="skeleton-card">
-          <div class="skeleton skeleton-block" style="width: 40%;"></div>
-          <div class="skeleton skeleton-val"></div>
-          <div class="skeleton skeleton-block" style="width: 50%;"></div>
-        </div>
+        <div class="dash-card dash-kpi-card"><div class="skeleton skeleton-block" style="width: 50%;"></div><div class="skeleton dash-kpi-skel"></div></div>
+        <div class="dash-card dash-kpi-card"><div class="skeleton skeleton-block" style="width: 40%;"></div><div class="skeleton dash-kpi-skel"></div></div>
+        <div class="dash-card dash-kpi-card"><div class="skeleton skeleton-block" style="width: 45%;"></div><div class="skeleton dash-kpi-skel"></div></div>
       `;
     }
 
-    // Category breakdown skeleton — 12 category card placeholders
+    const tbody = document.getElementById('recentTxBody');
+    if (tbody) {
+      tbody.innerHTML = Array(6).fill(`
+        <tr><td class="skeleton-td"><div class="skeleton" style="height:12px;width:72px;"></div></td>
+        <td class="skeleton-td"><div class="skeleton" style="height:12px;width:90%;"></div></td>
+        <td class="skeleton-td num"><div class="skeleton" style="height:12px;width:64px;margin-left:auto;"></div></td></tr>
+      `).join('');
+    }
+
+    const chart = document.getElementById('dailySpendChart');
+    if (chart) {
+      chart.innerHTML = Array(16).fill('<div class="dash-bar dash-bar-skeleton"></div>').join('');
+    }
+    const labels = document.getElementById('dailySpendLabels');
+    if (labels) labels.innerHTML = '';
+
+    const insightsPanel = document.getElementById('insightsPanel');
+    const insightsEmpty = document.getElementById('insightsEmpty');
+    if (insightsPanel) { insightsPanel.style.display = 'none'; insightsPanel.innerHTML = '<div class="insights-list" id="insightsList"></div>'; }
+    if (insightsEmpty) insightsEmpty.style.display = 'none';
+
     const categoriesContainer = document.getElementById('categoriesContainer');
     if (categoriesContainer) {
-      categoriesContainer.innerHTML = Array(12).fill(`
-        <div class="cat-card" style="pointer-events: none;">
-          <div class="skeleton skeleton-block" style="width: 55%; height: 16px; margin-bottom: 16px;"></div>
-          <div class="skeleton skeleton-block" style="width: 40%; margin-bottom: 6px;"></div>
-          <div class="skeleton skeleton-block" style="width: 65%; height: 14px; margin-bottom: 12px;"></div>
-          <div class="skeleton skeleton-block" style="width: 40%; margin-bottom: 6px;"></div>
-          <div class="skeleton skeleton-block" style="width: 65%; height: 14px; margin-bottom: 12px;"></div>
-          <div class="skeleton skeleton-block" style="width: 40%; margin-bottom: 6px;"></div>
-          <div class="skeleton skeleton-block" style="width: 65%; height: 14px; margin-bottom: 14px;"></div>
-          <div class="skeleton skeleton-block" style="width: 100%; height: 4px; border-radius: 2px;"></div>
+      categoriesContainer.innerHTML = Array(6).fill(`
+        <div class="envelope-card envelope-card--skeleton" style="pointer-events: none;">
+          <div class="envelope-skel-title"></div>
+          <div class="envelope-skel-row"></div>
+          <div class="envelope-skel-row"></div>
+          <div class="envelope-skel-row"></div>
+          <div class="envelope-skel-bar"></div>
         </div>
       `).join('');
     }
   }
 
-  function restoreDecisionCards() {
-    const yearSummary = document.getElementById('yearSummary');
-    if (!yearSummary) return;
-    yearSummary.innerHTML = `
-      <div class="summary-card decision-card" id="card-remainingBudget">
-        <div class="label">Remaining Budget</div>
-        <div class="decision-val" id="remainingBudgetVal">—</div>
-        <div class="decision-sub" id="remainingBudgetSub"></div>
-      </div>
-      <div class="summary-card decision-card" id="card-spend">
-        <div class="label">Spend vs Expected</div>
-        <div class="decision-compare">
-          <div class="decision-compare-row">
-            <span class="decision-compare-label">Actual</span>
-            <span class="decision-compare-val" id="spendActualVal">—</span>
-          </div>
-          <div class="decision-compare-row">
-            <span class="decision-compare-label">Expected</span>
-            <span class="decision-compare-val" id="spendExpectedVal">—</span>
-          </div>
-        </div>
-        <div class="decision-sub" id="spendDiffVal"></div>
-        <div class="note" id="spendNote">—</div>
-      </div>
-      <div class="summary-card decision-card" id="card-burnRate">
-        <div class="label">Monthly Burn Rate</div>
-        <div class="decision-val" id="burnRateVal">—</div>
-        <div class="decision-sub" id="burnRateSub"></div>
-        <div class="note" id="burnRateNote">Average monthly spend</div>
-      </div>
-      <div class="summary-card decision-card" id="card-projected">
-        <div class="label">Projected full-year spend</div>
-        <div class="decision-card-subtitle">Predicted total for the financial year</div>
-        <div class="decision-val" id="projectedVal">—</div>
-        <div class="decision-sub" id="projectedSub"></div>
-        <div class="note" id="projectedNote">Based on current burn rate</div>
-      </div>
-    `;
-  }
-
-  // ── Decision dashboard update ────────────────────────────────────────────────
-
   function updateStatusBanner(metrics: YearlyMetrics): void {
     const banner   = document.getElementById('statusBanner');
-    const iconEl   = document.getElementById('statusIcon');
+    const pipEl    = document.getElementById('statusPip');
     const labelEl  = document.getElementById('statusLabel');
     const detailEl = document.getElementById('statusDetail');
-    if (!banner || !iconEl || !labelEl || !detailEl) return;
+    if (!banner || !pipEl || !labelEl || !detailEl) return;
+
+    pipEl.className = 'dash-status-pip';
 
     if (!metrics.hasData) {
       banner.style.display = 'flex';
-      banner.className = 'status-banner status-no-data';
-      iconEl.textContent  = '○';
+      banner.className = 'dash-status-bar dash-status-bar--neutral';
+      pipEl.classList.add('dash-status-pip--muted');
       labelEl.textContent = 'No data yet';
-      detailEl.textContent = 'Start adding transactions to see insights';
+      detailEl.textContent = 'Add transactions to see your yearly pace';
       return;
     }
 
     banner.style.display = 'flex';
-    banner.className = 'status-banner'; // reset
-
-    const SVG_ON_TRACK = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><polyline points="4.5,8.5 7,11 11.5,5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    const SVG_WARNING   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><line x1="8" y1="6.5" x2="8" y2="9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.75" fill="currentColor"/></svg>`;
-    const SVG_OVER      = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    banner.className = 'dash-status-bar';
 
     switch (metrics.status) {
       case 'on-track':
-        banner.classList.add('status-on-track');
-        iconEl.innerHTML    = SVG_ON_TRACK;
-        labelEl.textContent = 'On Track';
+        banner.classList.add('dash-status-bar--ok');
+        pipEl.classList.add('dash-status-pip--ok');
+        labelEl.textContent = 'On track';
         detailEl.textContent = metrics.spendDiff < 0
-          ? `${formatCurrency(Math.abs(metrics.spendDiff), userCurrency)} under expected spend`
-          : `Spending right on pace`;
+          ? `${formatCurrency(Math.abs(metrics.spendDiff), userCurrency)} under expected spend (FY)`
+          : `Spending on pace for the financial year`;
         break;
       case 'slightly-over':
-        banner.classList.add('status-slightly-over');
-        iconEl.innerHTML    = SVG_WARNING;
-        labelEl.textContent = 'Slightly Over';
-        detailEl.textContent = `${formatCurrency(metrics.spendDiff, userCurrency)} over expected spend`;
+        banner.classList.add('dash-status-bar--warn');
+        pipEl.classList.add('dash-status-pip--warn');
+        labelEl.textContent = 'Slightly over';
+        detailEl.textContent = `${formatCurrency(metrics.spendDiff, userCurrency)} over expected (FY)`;
         break;
       case 'overspending':
-        banner.classList.add('status-overspending');
-        iconEl.innerHTML    = SVG_OVER;
+        banner.classList.add('dash-status-bar--bad');
+        pipEl.classList.add('dash-status-pip--bad');
         labelEl.textContent = 'Overspending';
-        detailEl.textContent = `${formatCurrency(metrics.spendDiff, userCurrency)} over expected spend`;
+        detailEl.textContent = `${formatCurrency(metrics.spendDiff, userCurrency)} over expected (FY)`;
         break;
       default:
         banner.style.display = 'none';
     }
   }
 
-  function updateDecisionDashboard(): void {
+  function updateMonthlyDashboard(
+    monthlyBudgetTotal: number,
+    monthlySpent: number,
+    transactions: { date: string | null; description: string | null; amount: number; category_id: string | null }[],
+    monthLabel: string,
+  ): void {
+    restoreDashboardKpiRow();
+
+    const left = monthlyBudgetTotal - monthlySpent;
+    const kpiLeft = document.getElementById('kpiLeftVal');
+    const kpiSpent = document.getElementById('kpiSpentVal');
+    const kpiBudget = document.getElementById('kpiBudgetVal');
+    const hintLeft = document.getElementById('kpiLeftHint');
+    const hintSpent = document.getElementById('kpiSpentHint');
+
+    if (kpiBudget) {
+      kpiBudget.textContent = monthlyBudgetTotal > 0 ? formatCurrency(monthlyBudgetTotal, userCurrency) : '—';
+    }
+    if (kpiSpent) {
+      kpiSpent.textContent = formatCurrency(monthlySpent, userCurrency);
+      kpiSpent.className = 'dash-kpi-value' + (monthlySpent > monthlyBudgetTotal && monthlyBudgetTotal > 0 ? ' dash-kpi-value--warn' : '');
+    }
+    if (kpiLeft) {
+      if (monthlyBudgetTotal <= 0) {
+        kpiLeft.textContent = '—';
+        kpiLeft.className = 'dash-kpi-value';
+      } else {
+        kpiLeft.textContent = formatCurrency(Math.abs(left), userCurrency);
+        kpiLeft.className = 'dash-kpi-value' + (left < 0 ? ' dash-kpi-value--warn' : ' dash-kpi-value--ok');
+      }
+    }
+    if (hintLeft) {
+      hintLeft.textContent = monthlyBudgetTotal > 0
+        ? (left >= 0 ? 'Remaining in calendar month' : 'Over monthly budget')
+        : 'Set category budgets in Settings';
+    }
+    if (hintSpent) {
+      hintSpent.textContent = monthLabel;
+    }
+
+    const monthLbl = document.getElementById('dailySpendMonthLabel');
+    if (monthLbl) monthLbl.textContent = monthLabel;
+
+    const tbody = document.getElementById('recentTxBody');
+    if (tbody) {
+      const rows = transactions.slice(0, 12);
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="dash-empty">No transactions imported this month.</td></tr>';
+      } else {
+        tbody.innerHTML = rows.map(tx => {
+          const desc = (tx.description || '—').trim() || '—';
+          const dt = tx.date || '—';
+          const amt = tx.amount;
+          const neg = amt < 0;
+          const amtStr = formatCurrency(Math.abs(amt), userCurrency);
+          const cls = neg ? 'dash-amt-expense' : 'dash-amt-income';
+          const sign = neg ? '-' : '';
+          return `<tr>
+            <td class="dash-tx-date">${escapeHtmlIndex(dt)}</td>
+            <td class="dash-tx-desc" title="${escapeAttrIndex(desc)}">${escapeHtmlIndex(desc.length > 48 ? desc.slice(0, 47) + '…' : desc)}</td>
+            <td class="num ${cls}"><span class="dash-amt">${sign}${escapeHtmlIndex(amtStr)}</span></td>
+          </tr>`;
+        }).join('');
+      }
+    }
+
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const spendByDay: number[] = Array(daysInMonth + 1).fill(0);
+    for (const tx of transactions) {
+      if (!tx.date || tx.amount >= 0) continue;
+      const parts = tx.date.slice(0, 10).split('-');
+      const d = parseInt(parts[2] || '0', 10);
+      if (d >= 1 && d <= daysInMonth) spendByDay[d] += -tx.amount;
+    }
+    const maxDay = Math.max(...spendByDay, 1);
+    const chartEl = document.getElementById('dailySpendChart');
+    if (chartEl) {
+      chartEl.innerHTML = Array.from({ length: daysInMonth }, (_, i) => {
+        const day = i + 1;
+        const v = spendByDay[day] || 0;
+        const pct = maxDay > 0 ? Math.round((v / maxDay) * 100) : 0;
+        const title = `${day}: ${formatCurrency(v, userCurrency)}`;
+        return `<div class="dash-bar-cell" title="${escapeAttrIndex(title)}"><div class="dash-bar" style="height:${pct}%;"></div></div>`;
+      }).join('');
+    }
+    const labelsEl = document.getElementById('dailySpendLabels');
+    if (labelsEl) {
+      const labelParts: string[] = [];
+      for (let d = 1; d <= daysInMonth; d += 1) {
+        if (d === 1 || d === daysInMonth || d % 7 === 0) labelParts.push(`<span>${d}</span>`);
+        else labelParts.push('<span></span>');
+      }
+      labelsEl.innerHTML = labelParts.join('');
+    }
+  }
+
+  function escapeHtmlIndex(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function escapeAttrIndex(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  function updateYearlyDashboard(): void {
     const metrics = getYearlyMetrics({ totalBudget: yearBudget, actualSpend: yearActual, monthsElapsed });
-
-    // ── Card 1: Remaining Budget ──────────────────────────────────────────────
-    // Always show the budget remainder — budget data exists even without spend.
-    const remVal  = document.getElementById('remainingBudgetVal');
-    const remSub  = document.getElementById('remainingBudgetSub');
-
-    if (remVal) {
-      if (!metrics.hasData) {
-        remVal.textContent = yearBudget > 0
-          ? formatCurrency(yearBudget, userCurrency)
-          : '—';
-        remVal.className = 'decision-val neutral';
-      } else {
-        remVal.textContent = formatCurrency(Math.abs(metrics.remaining), userCurrency);
-        remVal.className   = 'decision-val ' + (metrics.remaining >= 0 ? 'green' : 'red');
-      }
-    }
-    if (remSub) {
-      if (!metrics.hasData) {
-        remSub.textContent = yearBudget > 0 ? 'No spending recorded yet' : '';
-        remSub.className   = 'decision-sub';
-      } else if (metrics.remaining >= 0) {
-        remSub.textContent = `${formatCurrency(yearActual, userCurrency)} spent of ${formatCurrency(yearBudget, userCurrency)}`;
-        remSub.className   = 'decision-sub';
-      } else {
-        remSub.textContent = `${formatCurrency(Math.abs(metrics.remaining), userCurrency)} over budget`;
-        remSub.className   = 'decision-sub over';
-      }
-    }
-
-    // ── Card 2: Spend vs Expected ─────────────────────────────────────────────
-    const actVal     = document.getElementById('spendActualVal');
-    const expVal     = document.getElementById('spendExpectedVal');
-    const diffVal    = document.getElementById('spendDiffVal');
-    const spendNote  = document.getElementById('spendNote');
-
-    if (actVal) {
-      actVal.textContent = metrics.hasData ? formatCurrency(yearActual, userCurrency) : '—';
-    }
-    if (expVal) {
-      if (metrics.hasData) {
-        expVal.textContent = formatCurrency(metrics.expectedSpend, userCurrency);
-      } else if (yearBudget > 0 && monthsElapsed > 0) {
-        // Show what you should have spent even when actual = 0
-        expVal.textContent = formatCurrency(yearBudget * (monthsElapsed / 12), userCurrency);
-      } else {
-        expVal.textContent = '—';
-      }
-    }
-    if (diffVal) {
-      if (!metrics.hasData) {
-        diffVal.textContent = "You haven't spent anything yet";
-        diffVal.className   = 'decision-sub';
-      } else if (metrics.spendDiff > 100) {
-        diffVal.textContent = `Over by ${formatCurrency(metrics.spendDiff, userCurrency)}`;
-        diffVal.className   = 'decision-sub over';
-      } else if (metrics.spendDiff < -100) {
-        diffVal.textContent = `Under by ${formatCurrency(Math.abs(metrics.spendDiff), userCurrency)}`;
-        diffVal.className   = 'decision-sub under';
-      } else {
-        diffVal.textContent = 'Right on pace';
-        diffVal.className   = 'decision-sub under';
-      }
-    }
-    if (spendNote) {
-      spendNote.textContent = metrics.hasData
-        ? `${Math.round(metrics.progress * 100)}% of financial year elapsed`
-        : yearBudget > 0 && monthsElapsed > 0
-          ? `You should have spent ${formatCurrency(yearBudget * (monthsElapsed / 12), userCurrency)} by now`
-          : '—';
-    }
-
-    // ── Card 3: Monthly Burn Rate ─────────────────────────────────────────────
-    const burnVal  = document.getElementById('burnRateVal');
-    const burnSub  = document.getElementById('burnRateSub');
-    const burnNote = document.getElementById('burnRateNote');
-    const monthlyBudget = yearBudget > 0 ? yearBudget / 12 : 0;
-
-    if (burnVal) {
-      if (!metrics.hasData) {
-        burnVal.textContent = '—';
-        burnVal.className   = 'decision-val neutral';
-      } else {
-        burnVal.textContent = formatCurrency(metrics.burnRate, userCurrency);
-        burnVal.className   = 'decision-val ' + (monthlyBudget > 0 && metrics.burnRate > monthlyBudget ? 'red' : 'green');
-      }
-    }
-    if (burnSub) {
-      if (!metrics.hasData) {
-        burnSub.textContent = 'Not enough data yet';
-        burnSub.className   = 'decision-sub';
-      } else if (monthlyBudget > 0) {
-        const diff = metrics.burnRate - monthlyBudget;
-        if (diff > 100) {
-          burnSub.textContent = `${formatCurrency(diff, userCurrency)}/mo over budget`;
-          burnSub.className   = 'decision-sub over';
-        } else if (diff < -100) {
-          burnSub.textContent = `${formatCurrency(Math.abs(diff), userCurrency)}/mo under budget`;
-          burnSub.className   = 'decision-sub under';
-        } else {
-          burnSub.textContent = 'On budget';
-          burnSub.className   = 'decision-sub under';
-        }
-      } else {
-        burnSub.textContent = '';
-      }
-    }
-    if (burnNote) {
-      burnNote.textContent = metrics.hasData
-        ? `Average over ${metrics.monthsElapsed} month${metrics.monthsElapsed !== 1 ? 's' : ''}`
-        : 'Average monthly spend';
-    }
-
-    // ── Card 4: Projected full-year spend ─────────────────────────────────────
-    const projVal  = document.getElementById('projectedVal');
-    const projSub  = document.getElementById('projectedSub');
-    const projNote = document.getElementById('projectedNote');
-
-    if (projVal) {
-      if (!metrics.hasData) {
-        projVal.textContent = '—';
-        projVal.className   = 'decision-val neutral';
-      } else {
-        projVal.textContent = formatCurrency(metrics.projectedTotal, userCurrency);
-        projVal.className   = 'decision-val ' + (metrics.projectedDiff > 0 ? 'red' : 'green');
-      }
-    }
-    if (projSub) {
-      if (!metrics.hasData) {
-        projSub.textContent = 'Will calculate after spending begins';
-        projSub.className   = 'decision-sub';
-      } else if (metrics.projectedDiff > 100) {
-        projSub.textContent = `Projected overspend: ${formatCurrency(metrics.projectedDiff, userCurrency)}`;
-        projSub.className   = 'decision-sub over';
-      } else if (metrics.projectedDiff < -100) {
-        projSub.textContent = `Projected surplus: ${formatCurrency(Math.abs(metrics.projectedDiff), userCurrency)}`;
-        projSub.className   = 'decision-sub under';
-      } else {
-        projSub.textContent = 'Projected to finish on budget';
-        projSub.className   = 'decision-sub under';
-      }
-    }
-    if (projNote) {
-      // Footer adds context; avoid repeating the sub-line (which already names surplus/overspend).
-      projNote.textContent = metrics.hasData
-        ? 'Based on average spend so far'
-        : 'Based on current burn rate';
-    }
-
     updateStatusBanner(metrics);
-
-    // ── Card state: dim cards that have no real data ───────────────────────
-    const allCardIds = ['remainingBudget', 'spend', 'burnRate', 'projected'];
-    allCardIds.forEach(cardId => {
-      const card = document.getElementById(`card-${cardId}`);
-      if (!card) return;
-      if (!metrics.hasData) {
-        card.classList.add('no-data');
-      } else {
-        card.classList.remove('no-data');
-      }
-    });
-    // Remaining Budget always shows the budget remainder, so never dim it
-    const remCard = document.getElementById('card-remainingBudget');
-    if (remCard) remCard.classList.remove('no-data');
   }
 
   // ── Insights panel ───────────────────────────────────────────────────────
 
   function buildInsightsPanel(): void {
     const panel = document.getElementById('insightsPanel');
+    const emptyEl = document.getElementById('insightsEmpty');
     if (!panel) return;
 
-    const burnRate      = monthsElapsed > 0 ? yearActual / monthsElapsed : 0;
+    let list = document.getElementById('insightsList');
+    if (!list) {
+      panel.innerHTML = '<div class="insights-list" id="insightsList"></div>';
+      list = document.getElementById('insightsList');
+    }
+    if (!list) return;
+
+    const burnRate = monthsElapsed > 0 ? yearActual / monthsElapsed : 0;
     const projectedTotal = burnRate * 12;
-    const yearProgress   = monthsElapsed / 12;
-    const expectedSpend  = yearBudget * yearProgress;
+    const yearProgress = monthsElapsed / 12;
+    const expectedSpend = yearBudget * yearProgress;
 
     const insights = getInsights({
-      totalBudget:    yearBudget,
-      actualSpend:    yearActual,
+      totalBudget: yearBudget,
+      actualSpend: yearActual,
       expectedSpend,
       projectedTotal,
       yearProgress,
@@ -671,14 +601,14 @@ export const prerender = false;
 
     if (insights.length === 0) {
       panel.style.display = 'none';
+      if (emptyEl) emptyEl.style.display = 'block';
+      list.innerHTML = '';
       return;
     }
 
+    if (emptyEl) emptyEl.style.display = 'none';
     panel.style.display = 'block';
-    panel.innerHTML = `
-      <div class="section-title">What needs your attention</div>
-      <div class="insights-list">
-        ${insights.map(ins => `
+    list.innerHTML = insights.map(ins => `
           <div class="insight-row insight-${ins.type}">
             <span class="insight-dot insight-dot-${ins.type}" aria-hidden="true"></span>
             <span class="insight-text">
@@ -687,17 +617,18 @@ export const prerender = false;
               ${ins.category ? `<span class="insight-tag">${ins.category}</span>` : ''}
             </span>
           </div>
-        `).join('')}
-      </div>
-    `;
+        `).join('');
   }
 
   async function loadYear() {
     showSkeletons();
     
     try {
-      // Get current user first (needed for user_id in queries)
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const calNow = new Date();
+      const curMonthStart = `${calNow.getFullYear()}-${String(calNow.getMonth() + 1).padStart(2, '0')}-01`;
       
       // Financial year: April (month 3) of currentYear to March (month 2) of currentYear+1
       // Build months array: April, May, ..., December, January, February, March
@@ -717,12 +648,44 @@ export const prerender = false;
         months.push(monthStr);
       }
       
-      // Load all income sources for all months (sum per month)
-      const { data: incomes } = await supabase
-        .from('incomes')
-        .select('month, amount')
-        .in('month', months)
-        .eq('is_template', false);
+      const [
+        { data: incomes },
+        { data: allCategories },
+        { data: budgets, error: budgetError },
+        { data: monthBudgetRows },
+        { data: monthTxRows },
+      ] = await Promise.all([
+        supabase
+          .from('incomes')
+          .select('month, amount')
+          .in('month', months)
+          .eq('is_template', false),
+        supabase
+          .from('categories')
+          .select('id, name, monthly_amount, sort_order, type')
+          .order('sort_order', { ascending: true, nullsFirst: false })
+          .order('name', { ascending: true }),
+        supabase
+          .from('budgets')
+          .select('month, category_id, budget_amount, actual_amount')
+          .in('month', months),
+        supabase
+          .from('budgets')
+          .select('actual_amount')
+          .eq('user_id', user.id)
+          .eq('month', curMonthStart),
+        supabase
+          .from('transactions')
+          .select('date, description, amount, category_id')
+          .eq('user_id', user.id)
+          .eq('month', curMonthStart)
+          .order('date', { ascending: false })
+          .limit(120),
+      ]);
+
+      if (budgetError) {
+        console.error('Error loading budgets:', budgetError);
+      }
 
       const incomeMap: Record<string, number> = {};
       (incomes || []).forEach(inc => {
@@ -738,12 +701,6 @@ export const prerender = false;
         if (incomeMap[month] === undefined) incomeMap[month] = 0;
       }
 
-      // Load all categories with their monthly_amount defaults
-      const { data: allCategories } = await supabase
-        .from('categories')
-        .select('id, name, monthly_amount, sort_order, type')
-        .order('sort_order', { ascending: true, nullsFirst: false })
-        .order('name', { ascending: true });
       const catMonthlyMap: Record<string, { name: string; monthlyAmount: number; sortOrder: number; type: 'fixed' | 'variable' }> = {};
       (allCategories || []).forEach((c, i) => {
         catMonthlyMap[c.id] = {
@@ -753,16 +710,6 @@ export const prerender = false;
           type: c.type === 'fixed' ? 'fixed' : 'variable',
         };
       });
-
-      // Load budgets for all months (RLS should filter by user_id, but we'll be explicit)
-      const { data: budgets, error: budgetError } = await supabase
-        .from('budgets')
-        .select('month, category_id, budget_amount, actual_amount')
-        .in('month', months);
-
-      if (budgetError) {
-        console.error('Error loading budgets:', budgetError);
-      }
 
       const budgetMap: Record<string, number> = {};
       const actualMap: Record<string, number> = {};
@@ -831,9 +778,16 @@ export const prerender = false;
       // How many FY months have at least started (drives expected-spend & burn-rate)
       monthsElapsed = getMonthsElapsed(currentYear);
 
-      // Restore decision cards then populate them
-      restoreDecisionCards();
-      updateDecisionDashboard();
+      const monthlyBudgetTotal = Object.values(catMonthlyMap).reduce((sum, c) => sum + c.monthlyAmount, 0);
+      const monthlySpent = (monthBudgetRows || []).reduce((sum, r) => sum + parseFloat(String(r.actual_amount || 0)), 0);
+      const monthLabel = calNow.toLocaleString('default', { month: 'long', year: 'numeric' });
+      updateMonthlyDashboard(
+        monthlyBudgetTotal,
+        monthlySpent,
+        monthTxRows || [],
+        monthLabel,
+      );
+      updateYearlyDashboard();
       buildInsightsPanel();
 
       // Build category breakdown
@@ -847,190 +801,70 @@ export const prerender = false;
     }
   }
 
-  // ── Chart rendering helpers ─────────────────────────────────────────────────
-
-  function buildChartSVGContent(catId: string, mode: 'actual' | 'burn'): string {
-    const W = 300, H = 80, padTop = 8, padBottom = 4;
-    const plotH = H - padTop - padBottom;
-    const colW = (W / 18).toFixed(2);
-    const fyMonthKeys = monthlyData.map(m => m.month);
-    const fyMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
-    const cat = categoryData.find(c => c.id === catId);
-    if (!cat) return '';
-    const monthlyBudget = cat.annualBudget / 12;
-    const monthActuals = categoryMonthlyActuals[cat.id] || {};
-    const actuals = fyMonthKeys.map(mk => monthActuals[mk] || 0);
-    // Find last month index where monthly actual > 0
-    const lastDataIdx = actuals.reduce((last, v, i) => v > 0 ? i : last, -1);
-
-    if (mode === 'actual') {
-      const maxVal = Math.max(...actuals, monthlyBudget, 1);
-      const toY = (v: number) => padTop + (1 - v / maxVal) * plotH;
-      const refY = toY(monthlyBudget).toFixed(2);
-      const refLine = monthlyBudget > 0 ? `<line x1="0" y1="${refY}" x2="${W}" y2="${refY}" class="sparkline-ref" />` : '';
-      // If no data yet, render only the reference line
-      if (lastDataIdx === -1) return refLine;
-      const slicedActuals = actuals.slice(0, lastDataIdx + 1);
-      const polyPoints = slicedActuals.map((v, i) => `${((i / 11) * W).toFixed(2)},${toY(v).toFixed(2)}`).join(' ');
-      return [
-        refLine,
-        `<polyline points="${polyPoints}" class="sparkline-line" />`,
-        slicedActuals.map((v, i) => `<circle cx="${((i / 11) * W).toFixed(2)}" cy="${toY(v).toFixed(2)}" r="2.5" class="sparkline-dot" />`).join(''),
-        // Hit rects span all 12 months; only months with data get the sparkline-hit class (tooltip)
-        actuals.map((v, i) => {
-          const rx = ((i / 11) * W - W / 36).toFixed(2);
-          const hitClass = i <= lastDataIdx ? 'sparkline-hit' : '';
-          return `<rect x="${rx}" y="0" width="${colW}" height="${H}" fill="transparent" stroke="none" class="${hitClass}" data-month="${fyMonthLabels[i]}" data-amount="${v}" />`;
-        }).join(''),
-      ].join('');
-    }
-
-    // Burn Rate mode — cumulative actuals vs straight-line expected
-    const cumActuals: number[] = [];
-    let cum = 0;
-    for (const v of actuals) { cum += v; cumActuals.push(cum); }
-    const annualBudget = monthlyBudget * 12;
-    const maxVal = Math.max(...cumActuals, annualBudget, 1);
-    const toY = (v: number) => padTop + (1 - v / maxVal) * plotH;
-    // Colour: red if cumulative actual at last active month exceeds expected spend at that month
-    let colour: string;
-    if (lastDataIdx === -1) colour = 'var(--accent)'; // no data yet
-    else {
-      const cumAtLast = cumActuals[lastDataIdx];
-      const expectedAtLast = monthlyBudget * (lastDataIdx + 1);
-      const isOver = annualBudget > 0 && cumAtLast > expectedAtLast;
-      colour = isOver ? 'var(--red)' : 'var(--accent)';
-    }
-    // Reference line: straight diagonal from (x=0, y=0) to (x=W, y=annualBudget) — always full width
-    const refY1 = toY(0).toFixed(2);
-    const refY2 = toY(annualBudget).toFixed(2);
-    const refLine = annualBudget > 0 ? `<line x1="0" y1="${refY1}" x2="${W}" y2="${refY2}" class="sparkline-ref" />` : '';
-    // If no data yet, render only the reference line
-    if (lastDataIdx === -1) return refLine;
-    const slicedCumActuals = cumActuals.slice(0, lastDataIdx + 1);
-    const polyPoints = slicedCumActuals.map((v, i) => `${((i / 11) * W).toFixed(2)},${toY(v).toFixed(2)}`).join(' ');
-    return [
-      refLine,
-      `<polyline points="${polyPoints}" class="sparkline-line" style="stroke:${colour};" />`,
-      slicedCumActuals.map((v, i) => `<circle cx="${((i / 11) * W).toFixed(2)}" cy="${toY(v).toFixed(2)}" r="2.5" class="sparkline-dot" style="fill:${colour};" />`).join(''),
-      // Hit rects span all 12 months; only months with data get the sparkline-hit class (tooltip)
-      actuals.map((_v, i) => {
-        const rx = ((i / 11) * W - W / 36).toFixed(2);
-        const hitClass = i <= lastDataIdx ? 'sparkline-hit' : '';
-        return `<rect x="${rx}" y="0" width="${colW}" height="${H}" fill="transparent" stroke="none" class="${hitClass}" data-month="${fyMonthLabels[i]}" data-amount="${actuals[i]}" />`;
-      }).join(''),
-    ].join('');
-  }
-
-  function attachChartTooltips(card: HTMLElement): void {
-    const tooltip = document.getElementById('chartTooltip');
-    if (!tooltip) return;
-    card.querySelectorAll<SVGRectElement>('rect.sparkline-hit').forEach(rect => {
-      rect.addEventListener('mouseover', (e: MouseEvent) => {
-        const month = rect.dataset.month || '';
-        const amount = parseFloat(rect.dataset.amount || '0');
-        tooltip.textContent = `${month}  ${formatCurrency(amount, userCurrency)}`;
-        tooltip.style.opacity = '1';
-        tooltip.style.left = `${e.clientX + 12}px`;
-        tooltip.style.top = `${e.clientY - 28}px`;
-      });
-      rect.addEventListener('mousemove', (e: MouseEvent) => {
-        tooltip.style.left = `${e.clientX + 12}px`;
-        tooltip.style.top = `${e.clientY - 28}px`;
-      });
-      rect.addEventListener('mouseout', () => { tooltip.style.opacity = '0'; });
-    });
-  }
-
-  function switchChartMode(button: HTMLButtonElement, catId: string, mode: 'actual' | 'burn'): void {
-    const card = button.closest('.cat-card') as HTMLElement | null;
-    if (!card) return;
-    card.dataset.chartMode = mode;
-    card.querySelectorAll<HTMLButtonElement>('.chart-mode-btn').forEach(b => b.classList.remove('active'));
-    button.classList.add('active');
-    const svgEl = card.querySelector('.sparkline-svg');
-    if (svgEl) {
-      svgEl.innerHTML = buildChartSVGContent(catId, mode);
-      attachChartTooltips(card);
-    }
-  }
-
-  function switchAllChartMode(mode: 'actual' | 'burn', btn: HTMLButtonElement): void {
-    // Update the global toggle button states
-    const globalRow = btn.closest('.chart-global-toggle');
-    if (globalRow) {
-      globalRow.querySelectorAll<HTMLButtonElement>('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    }
-    // Switch every card to the chosen mode
-    document.querySelectorAll<HTMLElement>('.cat-card').forEach(card => {
-      const catId = card.dataset.catId || '';
-      const modeBtn = Array.from(card.querySelectorAll<HTMLButtonElement>('.chart-mode-btn'))
-        .find(b => mode === 'actual' ? b.textContent === 'Actual' : b.textContent === 'Burn Rate');
-      if (modeBtn) switchChartMode(modeBtn, catId, mode);
-    });
-  }
-
   function buildCategoryBreakdown() {
     const container = document.getElementById('categoriesContainer');
     if (!container) return;
 
     container.innerHTML = '';
 
-    // Financial year month labels in order: Apr … Mar
-    const fyMonthLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+    if (categoryData.length === 0) {
+      container.innerHTML = `<div class="envelope-empty">No category data for this financial year.</div>`;
+      return;
+    }
 
     categoryData.forEach(cat => {
       const remaining = cat.annualBudget - cat.annualActual;
-      const remainingClass = remaining < 0 ? 'red' : 'green';
-      const progressPct = cat.annualBudget > 0
+      const spentRatio = cat.annualBudget > 0 ? cat.annualActual / cat.annualBudget : 0;
+      const overBudget = cat.annualActual > cat.annualBudget;
+      const pctForBar = cat.annualBudget > 0
         ? Math.min((cat.annualActual / cat.annualBudget) * 100, 100)
         : 0;
-      const overBudget = cat.annualActual > cat.annualBudget;
 
-      const labelSpans = fyMonthLabels.map(lbl => `<span>${lbl}</span>`).join('');
+      let barClass = 'envelope-bar--ok';
+      let borderTone = 'envelope-card--accent-ok';
+      if (overBudget) {
+        barClass = 'envelope-bar--over';
+        borderTone = 'envelope-card--accent-over';
+      } else if (spentRatio > 0.8) {
+        barClass = 'envelope-bar--warn';
+        borderTone = 'envelope-card--accent-warn';
+      }
+
+      const leftLabel = remaining < 0 ? `${formatCurrency(Math.abs(remaining), userCurrency)} over` : formatCurrency(remaining, userCurrency);
+      const leftClass = remaining < 0 ? 'envelope-amt envelope-amt--danger' : 'envelope-amt envelope-amt--positive';
 
       const card = document.createElement('div');
-      card.className = 'cat-card';
+      card.className = `envelope-card ${borderTone}`;
       card.dataset.catId = cat.id;
-      card.dataset.chartMode = 'actual';
 
       card.innerHTML = `
-        <div class="cat-header">
-          <div class="cat-name">${cat.name}</div>
-          <button class="cat-detail-btn" onclick="openCatModal('${cat.id}')">See detail</button>
+        <div class="envelope-card-inner">
+          <div class="envelope-card-head">
+            <h3 class="envelope-title">${escapeHtmlIndex(cat.name)}</h3>
+            <button type="button" class="envelope-detail-btn" onclick="openCatModal('${cat.id}')">Detail</button>
+          </div>
+          <div class="envelope-rows">
+            <div class="envelope-row">
+              <span class="envelope-row-label">Budget</span>
+              <span class="envelope-amt">${escapeHtmlIndex(formatCurrency(cat.annualBudget, userCurrency))}</span>
+            </div>
+            <div class="envelope-row">
+              <span class="envelope-row-label">Spent</span>
+              <span class="envelope-amt">${escapeHtmlIndex(formatCurrency(cat.annualActual, userCurrency))}</span>
+            </div>
+            <div class="envelope-row">
+              <span class="envelope-row-label">Left</span>
+              <span class="${leftClass}">${escapeHtmlIndex(leftLabel)}</span>
+            </div>
+          </div>
+          <div class="envelope-track">
+            <div class="envelope-bar ${barClass}" style="width: ${cat.annualBudget > 0 ? (overBudget ? '100' : String(pctForBar)) : '0'}%;"></div>
+          </div>
         </div>
-        <div class="cat-row">
-          <span class="label">Annual Budget</span>
-          <span class="cat-val">${formatCurrency(cat.annualBudget, userCurrency)}</span>
-        </div>
-        <div class="cat-row">
-          <span class="label">Spent</span>
-          <span class="cat-val">${formatCurrency(cat.annualActual, userCurrency)}</span>
-        </div>
-        <div class="cat-row">
-          <span class="label">Remaining</span>
-          <span class="cat-val ${remainingClass}">${formatCurrency(Math.abs(remaining), userCurrency)}${remaining < 0 ? ' over' : ''}</span>
-        </div>
-        <div class="cat-progress-track">
-          <div class="cat-progress-bar ${overBudget ? 'over' : ''}" style="width: ${progressPct}%;"></div>
-        </div>
-        <div class="chart-toggle-row">
-          <button class="chart-mode-btn active" onclick="event.stopPropagation(); window.switchChartMode(this, '${cat.id}', 'actual')">Actual</button>
-          <button class="chart-mode-btn" onclick="event.stopPropagation(); window.switchChartMode(this, '${cat.id}', 'burn')">Burn Rate</button>
-        </div>
-        <div style="border-top: 1px solid var(--border); margin: 8px 0 16px;"></div>
-        <svg viewBox="0 0 300 80" class="sparkline-svg">${buildChartSVGContent(cat.id, 'actual')}</svg>
-        <div class="chart-month-labels">${labelSpans}</div>
       `;
 
       container.appendChild(card);
-      attachChartTooltips(card);
     });
-
-    if (categoryData.length === 0) {
-      container.innerHTML = `<div style="padding: 32px; color: var(--text-dim); font-size: 13px; grid-column: 1 / -1;">No category data for this financial year.</div>`;
-    }
   }
 
   async function updateExchangeRate() {
@@ -1198,8 +1032,6 @@ export const prerender = false;
   window.toggleTheme = toggleTheme;
   window.openCatModal = openCatModal;
   window.closeCatModal = closeCatModal;
-  window.switchChartMode = switchChartMode;
-  window.switchAllChartMode = switchAllChartMode;
 
   // Close modal on Escape key
   document.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -1222,7 +1054,416 @@ export const prerender = false;
 <style is:global>
   /* Page-specific styles for index.astro (yearly overview) */
 
-  /* Override base page width for wider yearly layout */
+  /* ── Dashboard shell (status, KPIs, split layout) ───────────────────────── */
+  .dash-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-muted);
+    background: var(--surface-1);
+    box-shadow: var(--shadow-soft);
+    flex-wrap: wrap;
+  }
+
+  .dash-status-pip {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--muted);
+  }
+
+  .dash-status-pip--ok {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+
+  .dash-status-pip--warn {
+    background: var(--accent2);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent2) 35%, transparent);
+  }
+
+  .dash-status-pip--bad {
+    background: var(--red);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 30%, transparent);
+  }
+
+  .dash-status-pip--muted {
+    background: var(--text-dim);
+  }
+
+  .dash-status-title {
+    font-family: var(--font-display), serif;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .dash-status-meta {
+    font-family: var(--font-ui);
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    flex: 1 1 100%;
+    max-width: none;
+    text-align: left;
+    line-height: 1.5;
+    margin-left: 0;
+    padding-left: 24px;
+  }
+
+  @media (min-width: 720px) {
+    .dash-status-meta {
+      flex: 0 1 420px;
+      margin-left: auto;
+      text-align: right;
+      padding-left: 0;
+    }
+  }
+
+  .dashboard-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+
+  @media (max-width: 900px) {
+    .dashboard-kpi-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .dash-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .dash-kpi-card {
+    padding: 28px 26px;
+  }
+
+  .dash-kpi-label {
+    font-family: var(--font-ui);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .dash-kpi-value {
+    font-family: var(--font-mono);
+    font-size: clamp(1.75rem, 3.2vw, 2.35rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.15;
+  }
+
+  .dash-kpi-value--ok {
+    color: var(--accent);
+  }
+
+  .dash-kpi-value--warn {
+    color: var(--red);
+  }
+
+  .dash-kpi-hint {
+    margin-top: 10px;
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+
+  .dash-kpi-skel {
+    height: 40px;
+    margin-top: 8px;
+  }
+
+  .dashboard-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 40px;
+  }
+
+  @media (max-width: 1100px) {
+    .dashboard-split {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .dash-right-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+
+  .dash-panel {
+    padding: 26px 28px;
+    min-width: 0;
+  }
+
+  .dash-panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .dash-panel-title {
+    font-family: var(--font-display), serif;
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .dash-panel-meta {
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    color: var(--text-dim);
+  }
+
+  .dash-panel-link {
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    padding-bottom: 1px;
+  }
+
+  .dash-panel-link:hover {
+    color: var(--text);
+    border-bottom-color: var(--text-dim);
+  }
+
+  .dash-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius-sm);
+    margin: 0 -4px;
+  }
+
+  .dash-tx-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-ui);
+    font-size: 0.875rem;
+  }
+
+  .dash-tx-table thead th {
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-muted);
+    background: transparent;
+  }
+
+  .dash-tx-table thead th.num {
+    text-align: right;
+  }
+
+  .dash-tx-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 85%, transparent);
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  .dash-tx-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .dash-tx-date {
+    color: var(--text-dim);
+    white-space: nowrap;
+    width: 1%;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash-tx-desc {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dash-tx-table .num {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    width: 1%;
+  }
+
+  .dash-amt-expense {
+    color: var(--red);
+  }
+
+  .dash-amt-income {
+    color: var(--accent);
+  }
+
+  .dash-empty {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 28px 16px !important;
+    font-size: 0.875rem;
+  }
+
+  .skeleton-td {
+    padding: 12px 16px !important;
+    border-bottom: 1px solid var(--border-muted);
+  }
+
+  .dash-bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 148px;
+    padding: 8px 0 4px;
+  }
+
+  .dash-bar-cell {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+  }
+
+  .dash-bar {
+    min-height: 2px;
+    width: 100%;
+    border-radius: 3px 3px 2px 2px;
+    background: color-mix(in srgb, var(--accent) 82%, var(--surface-3));
+    transition: height 0.2s ease;
+  }
+
+  .dash-bar-skeleton {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface-2);
+    border-radius: 3px;
+    opacity: 0.45;
+    height: 60%;
+    align-self: flex-end;
+  }
+
+  .dash-bar-labels {
+    display: flex;
+    gap: 3px;
+    margin-top: 8px;
+    font-family: var(--font-ui);
+    font-size: 0.625rem;
+    color: var(--muted);
+      text-align: center;
+  }
+
+  .dash-bar-labels span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dash-insights {
+    margin: 0;
+  }
+
+  .dash-insights .insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dash-insights .insight-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-muted);
+    background: color-mix(in srgb, var(--surface-2) 40%, var(--surface-1));
+    padding: 16px 18px;
+  }
+
+  .dash-insights .insight-row.insight-critical { border-left: 3px solid var(--red); }
+  .dash-insights .insight-row.insight-warning  { border-left: 3px solid var(--accent2); }
+  .dash-insights .insight-row.insight-good     { border-left: 3px solid var(--accent); }
+  .dash-insights .insight-row.insight-info     { border-left: 3px solid var(--muted); }
+
+  .dash-insights .insight-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  .dash-insights .insight-dot-critical { background: var(--red); }
+  .dash-insights .insight-dot-warning  { background: var(--accent2); }
+  .dash-insights .insight-dot-good     { background: var(--accent); }
+  .dash-insights .insight-dot-info     { background: var(--muted); }
+
+  .dash-insights .insight-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--text-dim);
+  }
+
+  .dash-insights .insight-head {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .dash-insights .insight-detail {
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+
+  .dash-insights .insight-tag {
+    display: inline-block;
+    align-self: flex-start;
+    font-family: var(--font-ui);
+    font-size: 0.625rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border-muted);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    margin-top: 2px;
+  }
+
+  .dash-insights-empty {
+    margin: 0;
+    padding: 8px 0 4px;
+    text-align: left;
+  }
   html, body {
     background: var(--bg) !important;
     color: var(--text) !important;
@@ -1236,19 +1477,6 @@ export const prerender = false;
     background: var(--bg) !important;
   }
 
-  h1 {
-    font-family: 'Fraunces', serif;
-    font-size: clamp(36px, 6vw, 64px);
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text) !important;
-    letter-spacing: -0.02em;
-  }
-
-  h1 span {
-    color: var(--accent) !important;
-  }
-
   /* Override summary grid columns for wider layout */
   .summary-grid {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1259,9 +1487,9 @@ export const prerender = false;
     background: var(--surface) !important;
   }
 
-  /* Override balance-section: no bottom margin on year page */
-  .balance-section {
-    margin-bottom: 0;
+  /* Conversion panel: tighter vertical rhythm on year page */
+  #zarToGbpSummary.app-card {
+    margin-bottom: var(--space-5);
   }
 
   input[type="number"] {
@@ -1283,408 +1511,252 @@ export const prerender = false;
     margin-bottom: 48px;
   }
 
-  #categoriesContainer {
+  .envelope-section-title {
+    margin-bottom: 20px;
+  }
+
+  .envelope-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1px;
-    background: var(--border) !important;
-    border: 1px solid var(--border) !important;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
     margin-top: 0;
   }
 
-  .cat-card {
-    background: var(--surface) !important;
-    padding: 20px;
-    border: none;
+  @media (max-width: 768px) {
+    .envelope-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
-  .cat-header {
+  .envelope-card {
+    background: #1c1f1a;
+    color: #e8ebe3;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-left: 4px solid var(--accent);
+    box-shadow:
+      0 2px 12px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .envelope-card--accent-ok {
+    border-left-color: var(--accent);
+  }
+
+  .envelope-card--accent-warn {
+    border-left-color: var(--accent2);
+  }
+
+  .envelope-card--accent-over {
+    border-left-color: var(--red);
+  }
+
+  .envelope-card-inner {
+    padding: 22px 24px 20px;
+  }
+
+  .envelope-card-head {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 20px;
   }
 
-  .cat-name {
-    font-family: 'Fraunces', serif;
-    font-size: 16px;
-    font-weight: 300;
-    font-style: italic;
-    color: var(--text-dim) !important;
-    letter-spacing: -0.01em;
+  .envelope-title {
+    font-family: var(--font-display), serif;
+    font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: #f4f6f0;
+    margin: 0;
+    line-height: 1.2;
   }
 
-  .cat-detail-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    padding: 4px 9px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-dim);
-    cursor: pointer;
-    border-radius: 2px;
-    transition: color 0.15s, border-color 0.15s;
-    white-space: nowrap;
+  .envelope-detail-btn {
     flex-shrink: 0;
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+    color: #b9c0b0;
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease,
+      background 0.15s ease;
   }
 
-  .cat-detail-btn:hover {
+  .envelope-detail-btn:hover {
+    border-color: color-mix(in srgb, var(--accent) 70%, transparent);
     color: var(--accent);
-    border-color: var(--accent);
+    background: rgba(200, 245, 96, 0.08);
   }
 
-  .cat-row {
+  .envelope-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .envelope-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 10px;
+    gap: 16px;
   }
 
-  .cat-row .label {
-    font-size: 10px;
+  .envelope-row-label {
+    font-family: var(--font-ui);
+    font-size: 0.6875rem;
+    font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--muted) !important;
-    margin: 0;
+    color: #8f9688;
   }
 
-  .cat-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
+  .envelope-amt {
+    font-family: var(--font-mono);
+    font-size: 0.9375rem;
     font-weight: 500;
-    color: var(--text) !important;
-    letter-spacing: -0.01em;
+    color: #e8ebe3;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
-  .cat-val.green { color: var(--accent) !important; }
-  .cat-val.red { color: var(--red) !important; }
+  .envelope-amt--positive {
+    color: #c8f560;
+  }
 
-  .cat-progress-track {
-    margin-top: 14px;
-    height: 4px;
-    background: var(--surface2);
+  .envelope-amt--danger {
+    color: #f58f8f;
+  }
+
+  .envelope-track {
+    margin-top: 18px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.09);
     border-radius: 2px;
     overflow: hidden;
   }
 
-  .cat-progress-bar {
+  .envelope-bar {
     height: 100%;
-    background: var(--accent);
     border-radius: 2px;
-    transition: width 0.3s ease;
+    transition: width 0.35s ease;
+    min-width: 0;
   }
 
-  .cat-progress-bar.over {
+  .envelope-bar--ok {
+    background: var(--accent);
+  }
+
+  .envelope-bar--warn {
+    background: var(--accent2);
+  }
+
+  .envelope-bar--over {
     background: var(--red);
   }
 
-  /* ── Sparklines (inside unified cat-cards) ── */
-  .sparkline-svg {
-    width: 100%;
-    height: auto;
-    display: block;
-    overflow: visible;
-  }
-
-  .sparkline-ref {
-    stroke: var(--border);
-    stroke-width: 1;
-    stroke-dasharray: 3 3;
-    fill: none;
-  }
-
-  .sparkline-line {
-    fill: none;
-    stroke: var(--accent);
-    stroke-width: 1.5;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-  }
-
-  .sparkline-dot {
-    fill: var(--accent);
-    stroke: none;
-  }
-
-  .chart-month-labels {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 6px;
-  }
-
-  .chart-month-labels span {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    color: var(--muted);
+  .envelope-empty {
+    grid-column: 1 / -1;
+    padding: 36px 24px;
     text-align: center;
-    flex: 1;
-  }
-
-  /* ── Sparkline chart mode toggle ── */
-  .chart-toggle-row {
-    display: flex;
-    gap: 4px;
-    margin-top: 14px;
-  }
-
-  .chart-mode-btn {
-    background: var(--surface2);
-    border: 1px solid var(--border);
     color: var(--text-dim);
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    padding: 3px 8px;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.15s;
-    letter-spacing: 0.02em;
+    font-size: 0.9375rem;
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--border-muted);
   }
 
-  .chart-mode-btn:hover {
-    border-color: var(--accent);
+  .envelope-card--skeleton {
+    min-height: 200px;
+    border-left-color: rgba(255, 255, 255, 0.15);
+    padding: 22px 24px 20px;
+  }
+
+  .envelope-skel-title {
+    height: 24px;
+    width: 58%;
+    max-width: 220px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    margin-bottom: 22px;
+  }
+
+  .envelope-skel-row {
+    height: 14px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    margin-bottom: 10px;
+  }
+
+  .envelope-skel-bar {
+    height: 3px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    margin-top: 18px;
+  }
+
+  /* Light theme: envelopes follow global tokens (cards were fixed dark and looked like wrong theme). */
+  [data-theme="light"] .envelope-card {
+    background: var(--surface-1);
+    color: var(--text);
+    border: 1px solid var(--border-muted);
+    box-shadow: var(--shadow-soft);
+  }
+
+  [data-theme="light"] .envelope-title {
+    color: var(--text);
+  }
+
+  [data-theme="light"] .envelope-detail-btn {
+    border-color: var(--border-muted);
+    background: var(--surface-2);
+    color: var(--text-dim);
+  }
+
+  [data-theme="light"] .envelope-detail-btn:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border-muted));
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  }
+
+  [data-theme="light"] .envelope-row-label {
+    color: var(--muted);
+  }
+
+  [data-theme="light"] .envelope-amt {
+    color: var(--text);
+  }
+
+  [data-theme="light"] .envelope-amt--positive {
     color: var(--accent);
   }
 
-  .chart-mode-btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--bg);
+  [data-theme="light"] .envelope-amt--danger {
+    color: var(--red);
   }
 
-  /* ── Status Banner ──────────────────────────────────────────────────────── */
-  .status-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 20px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    margin-bottom: 20px;
-    background: var(--surface);
-    transition: border-color 0.2s, background 0.2s;
+  [data-theme="light"] .envelope-track {
+    background: color-mix(in srgb, var(--border-muted) 65%, transparent);
   }
 
-  .status-banner.status-on-track {
-    border-color: var(--accent);
-    background: var(--surface);
-    box-shadow: inset 3px 0 0 var(--accent);
+  [data-theme="light"] .envelope-card--skeleton {
+    border-left-color: var(--border-muted);
   }
 
-  .status-banner.status-slightly-over {
-    border-color: var(--accent2);
-    background: var(--surface);
-    box-shadow: inset 3px 0 0 var(--accent2);
-  }
-
-  .status-banner.status-overspending {
-    border-color: var(--red);
-    background: var(--surface);
-    box-shadow: inset 3px 0 0 var(--red);
-  }
-
-  .status-banner.status-no-data {
-    border-color: var(--border);
-    background: var(--surface);
-    box-shadow: inset 3px 0 0 var(--text-dim);
-  }
-
-  .status-banner.status-no-data .status-label {
-    color: var(--text-dim);
-  }
-
-  .status-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-  }
-
-  .status-icon svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  .status-label {
-    font-family: 'Fraunces', serif;
-    font-size: 18px;
-    font-weight: 300;
-    font-style: italic;
-    color: var(--text);
-    flex-shrink: 0;
-  }
-
-  .status-detail {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-left: auto;
-    letter-spacing: 0.02em;
-  }
-
-  /* ── Insights Panel (matches month view insight rows) ───────────────────── */
-  .insights-panel {
-    margin-bottom: 48px;
-  }
-
-  .insights-panel .insights-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .insights-panel .insight-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px 18px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  .insights-panel .insight-row.insight-critical { border-left: 3px solid var(--red); }
-  .insights-panel .insight-row.insight-warning  { border-left: 3px solid var(--accent2); }
-  .insights-panel .insight-row.insight-good     { border-left: 3px solid var(--accent); }
-  .insights-panel .insight-row.insight-info      { border-left: 3px solid var(--muted); }
-
-  .insights-panel .insight-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 5px;
-  }
-
-  .insights-panel .insight-dot-critical { background: var(--red); }
-  .insights-panel .insight-dot-warning  { background: var(--accent2); }
-  .insights-panel .insight-dot-good     { background: var(--accent); }
-  .insights-panel .insight-dot-info      { background: var(--muted); }
-
-  .insights-panel .insight-text {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    color: var(--text-dim);
-  }
-
-  .insights-panel .insight-head {
-    font-weight: 500;
-    color: var(--text);
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .insights-panel .insight-detail {
-    font-size: 12px;
-    line-height: 1.55;
-  }
-
-  .insights-panel .insight-tag {
-    display: inline-block;
-    align-self: flex-start;
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    padding: 2px 8px;
-    border-radius: 2px;
-    margin-top: 2px;
-  }
-
-  /* ── Decision cards ─────────────────────────────────────────────────────── */
-  .decision-grid {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  }
-
-  .decision-card {
-    padding: 28px 24px;
-    position: relative;
-    transition: opacity 0.25s ease;
-  }
-
-  .decision-card.no-data {
-    opacity: 0.55;
-  }
-
-  .decision-card .note:empty {
-    display: none;
-  }
-
-  .decision-card-subtitle {
-    color: var(--text-dim);
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    line-height: 1.4;
-    margin: -4px 0 10px;
-    letter-spacing: 0.02em;
-  }
-
-  .decision-val {
-    font-family: 'Fraunces', serif;
-    font-size: 36px;
-    font-weight: 300;
-    color: var(--text);
-    margin: 10px 0 4px;
-    line-height: 1;
-    letter-spacing: -0.02em;
-  }
-
-  .decision-val.green   { color: var(--accent); }
-  .decision-val.red     { color: var(--red); }
-  .decision-val.yellow  { color: var(--accent2); }
-  .decision-val.neutral { color: var(--text-dim); }
-
-  .decision-sub {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    margin: 6px 0 8px;
-    color: var(--text-dim);
-    letter-spacing: 0.01em;
-  }
-
-  .decision-sub.over  { color: var(--red); }
-  .decision-sub.under { color: var(--accent); }
-
-  .decision-compare {
-    margin: 10px 0 4px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-
-  .decision-compare-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 8px 12px;
-  }
-
-  .decision-compare-row + .decision-compare-row {
-    border-top: 1px solid var(--border);
-  }
-
-  .decision-compare-label {
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  .decision-compare-val {
-    font-family: 'DM Mono', monospace;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text);
+  [data-theme="light"] .envelope-skel-title,
+  [data-theme="light"] .envelope-skel-row,
+  [data-theme="light"] .envelope-skel-bar {
+    background: color-mix(in srgb, var(--border-muted) 45%, var(--surface-2));
   }
 
 </style>
-</html>
+
+</DesktopLayout>

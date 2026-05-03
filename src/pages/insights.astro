@@ -1,0 +1,38 @@
+---
+import DesktopLayout from '../layouts/DesktopLayout.astro';
+import PageTitle from '../components/PageTitle.astro';
+import InsightsDashboard from '../components/insights/InsightsDashboard';
+
+export const prerender = false;
+
+const pathname = Astro.url.pathname;
+---
+
+<DesktopLayout title="Insights · Budget Tracker" pathname={pathname}>
+  <div class="page insights-page">
+    <PageTitle
+      label="Personal finance tracker"
+      titleBefore="Spending"
+      titleAccent=" Insights"
+      subtitle="FY pace to date, category mix, and how you compare to a linear annual budget"
+    />
+    <InsightsDashboard client:load />
+  </div>
+</DesktopLayout>
+
+<button type="button" class="theme-toggle" onclick="toggleTheme()" id="themeToggle" aria-label="Toggle color theme">Light</button>
+
+<script is:inline>
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    var btn = document.getElementById('themeToggle');
+    if (btn) btn.textContent = theme === 'light' ? 'Dark' : 'Light';
+  }
+  function toggleTheme() {
+    var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = cur === 'light' ? 'dark' : 'light';
+    localStorage.setItem('theme', next);
+    applyTheme(next);
+  }
+  applyTheme(localStorage.getItem('theme') || 'dark');
+</script>
