@@ -2,8 +2,10 @@ import { defineMiddleware } from 'astro:middleware';
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // Trim whitespace/newlines. Default `auto`: no path redirects — client `viewport-guard.js`
-  // picks mobile vs desktop by viewport; keep `auto` (or unset) for that behavior.
-  // Set PUBLIC_SITE_MODE=mobile | desktop only for fixed mobile-only / desktop-only deploys.
+  // sends narrow viewports from desktop paths to /mobile-*.
+  // Set PUBLIC_SITE_MODE=mobile for a mobile-only deploy (everything else -> mobile-dashboard).
+  // Do not redirect /mobile-* away on "desktop": that used to 307 to / and caused an infinite
+  // loop with viewport-guard (narrow / -> /mobile-dashboard -> 307 / -> ...).
   const raw = (import.meta.env.PUBLIC_SITE_MODE ?? 'auto').trim();
   const mode = raw === '' ? 'auto' : raw;
   const pathname = context.url.pathname;
@@ -22,14 +24,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
         return context.redirect('/mobile-settings', 307);
       }
       return context.redirect('/mobile-dashboard', 307);
-    }
-  }
-
-  // Desktop deployment: all /mobile-* routes (including /mobile-sort) redirect to home.
-  // Never send desktop traffic to mobile-only surfaces.
-  if (mode === 'desktop') {
-    if (isMobileRoute) {
-      return context.redirect('/', 307);
     }
   }
 
