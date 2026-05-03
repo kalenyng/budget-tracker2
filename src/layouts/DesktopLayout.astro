@@ -1,4 +1,6 @@
 ---
+import PwaHead from '../components/PwaHead.astro';
+
 interface Props {
   title: string;
   /** Current request path for active nav (pass Astro.url.pathname from the page). */
@@ -19,6 +21,8 @@ function isActive(href: string): boolean {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script is:inline src="/viewport-guard.js"></script>
+    <PwaHead />
     <title>{title}</title>
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"

@@ -169,8 +169,10 @@ export default function InsightsDashboard() {
     red: theme.red,
   };
 
+  const fySlotLabels = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+
   const burnData = payload.cumulativeFyBurn.map(p => ({
-    dayOfFy: p.dayOfFy,
+    fyMonthIndex: p.fyMonthIndex,
     Actual: p.actual,
     Expected: p.expected,
   }));
@@ -216,9 +218,11 @@ export default function InsightsDashboard() {
               <div className="insights-kpi-hint">
                 {payload.yearBudget <= 0
                   ? 'Set category monthly amounts'
-                  : payload.projectedVsAnnualBudget > 0
-                    ? `${fmt(payload.projectedVsAnnualBudget)} over annual budget`
-                    : `${fmt(Math.abs(payload.projectedVsAnnualBudget))} under annual budget`}
+                  : payload.yearActual <= 0
+                    ? 'Import spending to see a projection'
+                    : payload.projectedVsAnnualBudget > 0
+                      ? `${fmt(payload.projectedVsAnnualBudget)} over annual budget`
+                      : `${fmt(Math.abs(payload.projectedVsAnnualBudget))} under annual budget`}
               </div>
             </div>
             <div className="insights-kpi">
@@ -248,19 +252,22 @@ export default function InsightsDashboard() {
           <section className="insights-panel" aria-label="FY cumulative spend pace">
             <h2 className="insights-panel-title">FY spend vs linear annual pace</h2>
             <p className="insights-panel-lede">
-              Cumulative expense transactions from 1 Apr vs a straight line to your total annual budget (
-              {payload.fyLabel}). Day {payload.fyDaysElapsed} of {payload.fyDaysTotal} in the FY.
+              Cumulative actuals from committed monthly budgets after each FY month vs a straight line to your
+              annual total ({payload.fyLabel}). {payload.monthsElapsed} FY month
+              {payload.monthsElapsed !== 1 ? 's' : ''} started so far.
             </p>
             <div className="insights-chart-box">
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={burnData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} />
                   <XAxis
-                    dataKey="dayOfFy"
+                    dataKey="fyMonthIndex"
                     tick={{ fill: theme.textDim, fontSize: 10 }}
-                    minTickGap={32}
+                    ticks={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
+                    tickFormatter={(v: string | number) =>
+                      fySlotLabels[Math.max(0, Number(v) - 1)] ?? String(v)}
                     label={{
-                      value: 'Day of FY (from 1 Apr)',
+                      value: 'FY month (Apr → Mar)',
                       position: 'insideBottom',
                       offset: -4,
                       fill: theme.muted,

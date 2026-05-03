@@ -1,0 +1,10 @@
+---
+interface Props {
+  kicker: string;
+}
+const { kicker } = Astro.props;
+---
+<header class="mobile-app-header">
+  <span class="mobile-app-kicker">{kicker}</span>
+  <a href="#" onclick="handleSignOut(); return false;" class="mobile-app-signout signout-link">Sign out</a>
+</header>

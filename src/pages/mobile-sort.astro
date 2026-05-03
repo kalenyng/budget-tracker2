@@ -1,7 +1,9 @@
 ---
 // Mobile Transaction Sorter
 // Screen 1: CSV Upload → Screen 2: Card Sorter → Screen 3: Results
+import MobileAppHeader from '../components/MobileAppHeader.astro';
 import MobileNav from '../components/MobileNav.astro';
+import PwaHead from '../components/PwaHead.astro';
 ---
 
 <!DOCTYPE html>
@@ -9,6 +11,7 @@ import MobileNav from '../components/MobileNav.astro';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <PwaHead />
   <title>Quick Sort · Budget Tracker</title>
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
@@ -16,6 +19,7 @@ import MobileNav from '../components/MobileNav.astro';
   />
   <link rel="stylesheet" href="/styles/global.css">
   <link rel="stylesheet" href="/styles/mobile.css" />
+  <script is:inline src="/viewport-guard.js"></script>
   <!-- Apply saved theme before first paint to avoid flash of wrong theme -->
   <script>
     (function () {
@@ -30,6 +34,8 @@ import MobileNav from '../components/MobileNav.astro';
 <div id="uploadScreen" class="screen">
   <div class="screen-inner">
 
+    <MobileAppHeader kicker="SORT" />
+
     <div class="upload-hero">
       <h1>Quick<br><span>Sort</span></h1>
       <p>Upload a bank CSV and categorize every transaction with a tap.</p>
@@ -39,12 +45,20 @@ import MobileNav from '../components/MobileNav.astro';
     <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="Upload CSV file">
       <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none">
       <div id="dropZoneIdle">
-        <div class="drop-icon">↑</div>
+        <div class="drop-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5v14M12 5l4 4M12 5l-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <div class="drop-label">Tap to upload CSV</div>
         <div class="drop-sub">or drag &amp; drop</div>
       </div>
       <div id="dropZoneDone" style="display:none" class="drop-done">
-        <div class="done-check">✓</div>
+        <div class="done-check" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <div id="doneFileName" class="done-name"></div>
         <div id="doneRowCount" class="done-count"></div>
       </div>
@@ -85,6 +99,7 @@ import MobileNav from '../components/MobileNav.astro';
     <!-- Top bar -->
     <div class="sorter-topbar">
       <button id="backBtn" class="topbar-back" aria-label="Back to upload">←</button>
+      <button id="startNewBtn" class="topbar-start-new" type="button">Start New</button>
       <div class="progress-text">
         <span id="progressCurrent">1</span>
         <span class="progress-sep">/</span>
@@ -148,7 +163,11 @@ import MobileNav from '../components/MobileNav.astro';
 
     <div class="results-header">
       <div class="results-done-label">ALL DONE</div>
-      <div class="results-check">✓</div>
+      <div class="results-check" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div class="results-subtitle">
         <span id="resultsSortedCount">0</span> transactions sorted
       </div>
@@ -187,15 +206,28 @@ import MobileNav from '../components/MobileNav.astro';
 
 <script>
   import { supabase }                                        from '../lib/supabase';
-  import { getCurrentUser, onAuthStateChange }               from '../lib/auth';
+  import { getCurrentUser, onAuthStateChange, signOut }               from '../lib/auth';
   import { getCurrencySymbol, type CurrencyCode } from '../lib/currency';
+  import { showConfirm } from '../lib/dialogs';
+
+  declare global {
+    interface Window {
+      handleSignOut: () => Promise<void>;
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    window.location.href = '/auth';
+  }
+  window.handleSignOut = handleSignOut;
 
   // ── Theme ─────────────────────────────────────────────────────────────────
 
   function applyTheme(theme: string) {
     document.documentElement.setAttribute('data-theme', theme);
     const btn = document.getElementById('themeToggle');
-    if (btn) btn.textContent = theme === 'light' ? '☾ Dark' : '☀ Light';
+    if (btn) btn.textContent = theme === 'light' ? 'Use dark mode' : 'Use light mode';
   }
 
   function toggleTheme() {
@@ -882,7 +914,7 @@ import MobileNav from '../components/MobileNav.astro';
         btn.blur(); // Remove focus outline
       });
       // Force a reflow to ensure state is cleared
-      void document.querySelector('.category-grid')?.offsetHeight;
+      void (document.querySelector('.category-grid') as HTMLElement | null)?.offsetHeight;
       renderCard('forward');
       updateProgress();
       await saveProgress(); // Save after each categorization
@@ -1298,44 +1330,20 @@ import MobileNav from '../components/MobileNav.astro';
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
-  async function init() {
-    onAuthStateChange((_event, session) => {
-      if (!session?.user) window.location.href = '/auth';
-    });
-
-    const ok = await checkAuth();
-    if (!ok) return;
-
-    // Clear any old-format progress (migration cleanup)
-    localStorage.removeItem('mobile_sort_progress');
-
-    // Check for saved progress on load
-    const savedProgress = await loadProgress();
-    if (savedProgress && savedProgress.transactions.length > 0) {
-      await Promise.all([loadCategories(), loadCurrency()]);
-      await restoreProgress(savedProgress);
-      // Set up event listeners for saving progress
-      setupProgressSaving();
-      return; // Don't continue with normal init
-    }
-
-    await Promise.all([loadCategories(), loadCurrency()]);
-
-    // File input
+  /** Upload + sorter + results controls (must run after restoreProgress too). */
+  function setupInteractiveControls() {
     const fileInput = document.getElementById('csvFileInput') as HTMLInputElement;
     const dropZone  = document.getElementById('dropZone')!;
 
     fileInput.addEventListener('change', handleFileChange);
 
     dropZone.addEventListener('click', () => {
-      // Don't open file picker if clicking start button or selects
       fileInput.click();
     });
     dropZone.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
     });
 
-    // Drag and drop
     dropZone.addEventListener('dragover', (e: DragEvent) => {
       e.preventDefault();
       dropZone.classList.add('drop-active');
@@ -1353,15 +1361,26 @@ import MobileNav from '../components/MobileNav.astro';
       }
     });
 
-    // Buttons
     document.getElementById('startBtn')!.addEventListener('click', startSorting);
     document.getElementById('undoBtn')!.addEventListener('click', handleUndo);
     document.getElementById('sortAgainBtn')!.addEventListener('click', restartSort);
-    document.getElementById('backBtn')!.addEventListener('click', () => {
-      if (confirm('Go back to upload? Your progress will be lost.')) restartSort();
+    document.getElementById('startNewBtn')!.addEventListener('click', async () => {
+      if (await showConfirm(
+        'Start new sort',
+        'Your current progress will be lost.',
+        'Start new',
+        true,
+      )) restartSort();
+    });
+    document.getElementById('backBtn')!.addEventListener('click', async () => {
+      if (await showConfirm(
+        'Back to upload',
+        'Your progress will be lost.',
+        'Continue',
+        true,
+      )) restartSort();
     });
 
-    // Commit modal
     document.getElementById('commitResultsBtn')!.addEventListener('click', openCommitModal);
     document.getElementById('commitCancelBtn')!.addEventListener('click', closeCommitModal);
     document.getElementById('commitConfirmBtn')!.addEventListener('click', confirmCommit);
@@ -1370,6 +1389,33 @@ import MobileNav from '../components/MobileNav.astro';
     });
 
     initSwipe();
+  }
+
+  async function init() {
+    onAuthStateChange((_event, session) => {
+      if (!session?.user) window.location.href = '/auth';
+    });
+
+    const ok = await checkAuth();
+    if (!ok) return;
+
+    // Clear any old-format progress (migration cleanup)
+    localStorage.removeItem('mobile_sort_progress');
+
+    // Check for saved progress on load
+    const savedProgress = await loadProgress();
+    if (savedProgress && savedProgress.transactions.length > 0) {
+      await Promise.all([loadCategories(), loadCurrency()]);
+      await restoreProgress(savedProgress);
+      setupInteractiveControls();
+      // Set up event listeners for saving progress
+      setupProgressSaving();
+      return; // Don't continue with normal init
+    }
+
+    await Promise.all([loadCategories(), loadCurrency()]);
+
+    setupInteractiveControls();
     setupProgressSaving();
   }
 
@@ -1493,11 +1539,13 @@ import MobileNav from '../components/MobileNav.astro';
      ══════════════════════════════════════════════════════════════════════ */
   .screen-inner {
     width: 100%;
-    max-width: 480px;
-    padding: 52px 24px 48px;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 8px 18px 48px;
     display: flex;
     flex-direction: column;
-    gap: 28px;
+    gap: 22px;
+    box-sizing: border-box;
   }
 
   .upload-header {
@@ -1555,7 +1603,14 @@ import MobileNav from '../components/MobileNav.astro';
     background: rgba(var(--accent-rgb), 0.025);
   }
 
-  .drop-icon  { font-size: 28px; color: var(--accent); margin-bottom: 10px; }
+  .drop-icon {
+    color: var(--accent);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .drop-icon svg { display: block; }
   .drop-label { color: var(--text); font-size: 13px; letter-spacing: 0.04em; margin-bottom: 4px; }
   .drop-sub   { color: var(--muted); font-size: 11px; }
 
@@ -1564,7 +1619,14 @@ import MobileNav from '../components/MobileNav.astro';
     align-items: center;
     gap: 4px;
   }
-  .done-check { color: var(--accent); font-size: 24px; margin-bottom: 4px; }
+  .done-check {
+    color: var(--accent);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .done-check svg { display: block; }
   .done-name  { color: var(--text); font-size: 12px; word-break: break-all; }
   .done-count { color: var(--muted); font-size: 11px; margin-top: 2px; }
 
@@ -1640,13 +1702,15 @@ import MobileNav from '../components/MobileNav.astro';
      ══════════════════════════════════════════════════════════════════════ */
   .sorter-inner {
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
+    margin: 0 auto;
     min-height: 100vh;
     min-height: 100dvh;
-    padding: 0 20px 32px;
+    padding: 0 18px 32px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    box-sizing: border-box;
   }
 
   /* Top bar */
@@ -1654,8 +1718,7 @@ import MobileNav from '../components/MobileNav.astro';
     display: flex;
     align-items: center;
     gap: 12px;
-    padding-top: 16px;
-    padding-top: max(16px, env(safe-area-inset-top));
+    padding-top: 12px;
     flex-shrink: 0;
   }
 
@@ -1673,6 +1736,27 @@ import MobileNav from '../components/MobileNav.astro';
     line-height: 1;
   }
   .topbar-back:hover { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.35); }
+
+  .topbar-start-new {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    line-height: 1;
+  }
+  .topbar-start-new:hover {
+    color: var(--accent);
+    border-color: rgba(var(--accent-rgb), 0.35);
+    background: rgba(var(--accent-rgb), 0.05);
+  }
 
   .progress-text {
     color: var(--muted);
@@ -1900,7 +1984,14 @@ import MobileNav from '../components/MobileNav.astro';
 
   .results-header   { text-align: center; }
   .results-done-label { color: var(--accent); font-size: 10px; letter-spacing: 0.22em; margin-bottom: 10px; }
-  .results-check    { color: var(--card-amt); font-size: 32px; font-family: 'Fraunces', serif; margin-bottom: 6px; }
+  .results-check {
+    color: var(--card-amt);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .results-check svg { display: block; }
   .results-subtitle { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; }
 
   .results-list {

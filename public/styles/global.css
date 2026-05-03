@@ -117,6 +117,8 @@ html, body {
 
 body {
   padding: var(--space-7) 0;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 table {
@@ -1404,6 +1406,13 @@ td.active-cell {
   min-height: 280px;
 }
 
+.insights-chart-box--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
 .insights-feed-aside {
   background: var(--surface-1);
   border: 1px solid var(--border-muted);
@@ -1504,4 +1513,24 @@ td.active-cell {
   letter-spacing: 0.08em;
   color: var(--accent2);
   flex-shrink: 0;
+}
+
+/* Touch shells: reduce rubber-band / scroll chaining; avoid iOS zoom on field focus */
+@media (pointer: coarse) {
+  html {
+    overscroll-behavior: none;
+    height: 100%;
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not(
+      [type='button']
+    ):not([type='submit']):not([type='reset']),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
 }

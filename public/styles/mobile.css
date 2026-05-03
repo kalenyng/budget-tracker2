@@ -1,10 +1,16 @@
 /* ── Reset desktop layout constraints ── */
+html {
+  overscroll-behavior: none;
+  height: 100%;
+}
+
 body {
   padding: 0 !important;
   padding-top: env(safe-area-inset-top) !important;
   padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
 }
 
 .page {
@@ -13,6 +19,17 @@ body {
   margin: 0 !important;
   padding: 0 16px !important;
   padding-bottom: 0 !important;
+}
+
+/* .page uses !important; app shell needs matching horizontal rhythm and bottom nav clearance */
+.page.mobile-app-page {
+  max-width: 520px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: var(--mobile-app-space-md, 18px) !important;
+  padding-right: var(--mobile-app-space-md, 18px) !important;
+  padding-bottom: 96px !important;
+  padding-top: 0 !important;
 }
 
 /* ── Bottom navigation bar ── */
@@ -59,18 +76,73 @@ body {
   stroke-linejoin: round;
 }
 
-/* ── App header ── */
-.mobile-header {
+/* ── Mobile app shell (dashboard / settings / sort) ── */
+.mobile-app-page {
+  --mobile-app-space-xs: 8px;
+  --mobile-app-space-sm: 12px;
+  --mobile-app-space-md: 18px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding-left: var(--mobile-app-space-md);
+  padding-right: var(--mobile-app-space-md);
+  padding-bottom: 96px;
+  box-sizing: border-box;
+}
+
+.mobile-app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 0 16px;
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 10;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
+  /* body already applies safe-area-inset-top */
+  padding-top: var(--mobile-app-space-sm);
+  padding-bottom: var(--mobile-app-space-md);
+  flex-shrink: 0;
+}
+
+.mobile-app-kicker {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+}
+
+.mobile-app-signout.signout-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--text-dim);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-theme='light'] .mobile-app-signout.signout-link {
+  background: rgba(0, 0, 0, 0.04);
+  box-shadow: none;
+}
+
+.mobile-app-signout.signout-link:hover {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .mobile-app-signout.signout-link:active {
+    transform: scale(0.96);
+  }
 }
 
 /* ── Cards ── */

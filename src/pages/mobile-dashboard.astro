@@ -1,6 +1,8 @@
 ---
-// Mobile Dashboard
+// Mobile Dashboard — state-driven home (see mobileDashboardModel + plan spec)
+import MobileAppHeader from '../components/MobileAppHeader.astro';
 import MobileNav from '../components/MobileNav.astro';
+import PwaHead from '../components/PwaHead.astro';
 ---
 
 <!DOCTYPE html>
@@ -8,6 +10,7 @@ import MobileNav from '../components/MobileNav.astro';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <PwaHead />
   <title>Dashboard · Budget Tracker</title>
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
@@ -15,7 +18,7 @@ import MobileNav from '../components/MobileNav.astro';
   />
   <link rel="stylesheet" href="/styles/global.css">
   <link rel="stylesheet" href="/styles/mobile.css" />
-  <!-- Apply saved theme before first paint — no flash -->
+  <script is:inline src="/viewport-guard.js"></script>
   <script>
     (function () {
       const t = localStorage.getItem('theme') || 'dark';
@@ -25,62 +28,129 @@ import MobileNav from '../components/MobileNav.astro';
 </head>
 <body>
 
-<div class="page">
+<div class="page mobile-dash-page mobile-app-page mobile-dash-loading">
 
-  <!-- ① Header bar -->
-  <div class="mobile-header">
-    <span style="font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--text-dim);">DASHBOARD</span>
-    <div style="display: flex; align-items: center; gap: 14px;">
-      <span class="db-month-chip" id="dbMonthLabel"></span>
-      <a href="#" onclick="handleSignOut(); return false;" class="signout-link">Sign out</a>
+  <MobileAppHeader kicker="HOME" />
+
+  <div id="dbPageSkeleton" class="mobile-dash-page-skeleton" aria-busy="true" aria-label="Loading dashboard">
+    <div class="mobile-dash-skeleton-hero">
+      <div class="skeleton mobile-dash-skeleton-chip"></div>
+      <div class="skeleton mobile-dash-skeleton-headline"></div>
+      <div class="skeleton mobile-dash-skeleton-sub"></div>
+      <div class="skeleton mobile-dash-skeleton-sub mobile-dash-skeleton-sub--short"></div>
+      <div class="skeleton mobile-dash-skeleton-cta"></div>
+    </div>
+    <div class="mobile-dash-skeleton-sheet">
+      <div class="mobile-dash-skeleton-metrics">
+        <div class="skeleton mobile-dash-skeleton-metric"></div>
+        <div class="skeleton mobile-dash-skeleton-metric"></div>
+        <div class="skeleton mobile-dash-skeleton-metric"></div>
+      </div>
+      <div class="skeleton mobile-dash-skeleton-line"></div>
+      <div class="skeleton mobile-dash-skeleton-line"></div>
+    </div>
+    <div class="mobile-dash-skeleton-nav">
+      <div class="skeleton mobile-dash-skeleton-nav-row"></div>
+      <div class="skeleton mobile-dash-skeleton-nav-row"></div>
     </div>
   </div>
 
-  <!-- ② Days left banner -->
-  <div class="mobile-card" id="dbDaysBanner" style="padding: 13px 20px; border-radius: 999px; border: 1px solid transparent; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; text-align: center; letter-spacing: 0.04em;"></div>
+  <div class="mobile-dash-live-root" id="dbDashLiveRoot">
+  <section class="mobile-dash-widget mobile-dash-widget--hero" id="dbHeroWidget" aria-labelledby="dbHeadlineValue">
+    <div class="mobile-dash-widget-surface mobile-dash-widget-surface--hero">
+      <div class="mobile-dash-hero-meta">
+        <p class="mobile-dash-strip mobile-dash-context" id="dbContextBanner" style="display:none;" role="status"></p>
+        <p class="mobile-dash-strip mobile-dash-days" id="dbDaysBanner" style="display:none;" role="status"></p>
+      </div>
+      <button type="button" class="mobile-dash-month-trigger db-month-chip db-month-chip--btn" id="dbMonthChip" aria-expanded="false" aria-controls="dbMonthsPanel">
+        <span id="dbMonthLabel"></span>
+      </button>
+      <div class="mobile-dash-hero-value" id="dbHeadlineValue"></div>
+      <p class="mobile-dash-hero-sub" id="dbHeadlineSub"></p>
+      <div class="mobile-dash-hero-cta-stack">
+        <a href="#" class="mobile-btn-primary mobile-dash-primary-cta" id="dbPrimaryBtn" style="display:none;"></a>
+        <div class="mobile-dash-secondaries" id="dbSecondaries"></div>
+      </div>
+    </div>
+  </section>
 
-  <!-- ③ Upload prompt (shown only when no transactions for current month) -->
-  <div class="mobile-card" id="dbUploadPrompt" style="display:none; flex-direction: column; gap: 12px; border-color: var(--accent2); background: rgba(245,200,66,0.08);">
-    <div id="dbUploadText" style="font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent2);"></div>
-    <a href="/mobile-sort" class="mobile-btn-primary" style="margin-bottom: 0;">⬆ Import CSV</a>
+  <div id="dbAnalyticalFlow" class="mobile-dash-analytical-flow" style="display: none">
+    <div class="mobile-dash-analytical-sheet">
+      <div id="dbMetricsStrip" class="mobile-dash-metrics-strip" style="display: none"></div>
+      <div id="dbVisualAnchor" class="mobile-dash-visual-anchor" style="display: none" aria-hidden="true"></div>
+      <div id="dbInsightWidget" class="mobile-dash-flow-zone mobile-dash-flow-zone--insights" style="display: none">
+        <p class="mobile-dash-flow-kicker">Signals</p>
+        <div id="dbInsightBlock" class="mobile-dash-insights-inner"></div>
+      </div>
+      <div id="dbSnapshotWidget" class="mobile-dash-flow-zone mobile-dash-flow-zone--cats" style="display: none">
+        <h2 id="dbSnapshotTitle" class="mobile-dash-snapshot-title">Top categories</h2>
+        <div id="dbSnapshotList" class="mobile-dash-snapshot-list"></div>
+      </div>
+    </div>
   </div>
 
-  <!-- ④ Budget this month -->
-  <div class="mobile-card">
-    <div class="mobile-section-label">This month's budget</div>
-    <div id="dbCatList"></div>
+  <div class="mobile-dash-nav-stack">
+    <div class="mobile-dash-nav-row" id="dbBreakdownCard">
+      <button type="button" class="mobile-dash-nav-trigger" id="dbBreakdownToggle" aria-expanded="false" aria-controls="dbCatPanel">
+        <span class="mobile-dash-nav-label">All categories</span>
+        <svg class="mobile-dash-chevron" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div id="dbCatPanel" class="mobile-dash-nav-panel" hidden>
+        <div id="dbCatList" class="mobile-dash-cat-list"></div>
+      </div>
+    </div>
+    <div class="mobile-dash-nav-row" id="dbMonthsCard">
+      <button type="button" class="mobile-dash-nav-trigger" id="dbMonthsToggle" aria-expanded="false" aria-controls="dbMonthsPanel">
+        <span class="mobile-dash-nav-label">Browse months</span>
+        <svg class="mobile-dash-chevron" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div id="dbMonthsPanel" class="mobile-dash-nav-panel mobile-dash-months-panel" hidden>
+        <div class="db-cal-grid" id="dbCalGrid"></div>
+      </div>
+    </div>
   </div>
 
-  <!-- ⑤ Monthly calendar -->
-  <div class="mobile-card">
-    <div class="mobile-section-label">Months</div>
-    <div class="db-cal-grid" id="dbCalGrid"></div>
   </div>
-
-  <!-- ⑥ Quick actions -->
-  <a href="/mobile-sort" class="mobile-btn-primary">⚡ Quick Sort</a>
 
 </div>
 
 <MobileNav activePage="home" />
 
 <script>
+  declare global {
+    interface Window {
+      handleSignOut: () => Promise<void>;
+      goToMonth: (ym: string) => void;
+      expandDbBreakdown: () => void;
+      discardSortSession: () => Promise<void>;
+    }
+  }
+
   import { supabase } from '../lib/supabase';
   import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
   import { formatCurrency } from '../lib/currency';
   import type { CurrencyCode } from '../lib/currency';
+  import {
+    buildMeaningfulMonthSet,
+    currentCalendarYM,
+    deriveDashboardState,
+    insightLinesForMobile,
+    monthStartIso,
+    pickFocusYM,
+    readSortSessionFromStorage,
+    getMobileSortProgressKey,
+    type DashboardStateId,
+  } from '../lib/mobileDashboardModel';
+  import { buildFyInsights, buildFyMonthStarts, fyStartYear } from '../lib/mobileDashboardInsights';
 
   let userCurrency: CurrencyCode = 'ZAR';
 
-  // ── Theme ─────────────────────────────────────────────────────────────────
-  // Theme is managed in settings page
   const savedTheme = localStorage.getItem('theme') || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function isMobileDevice() {
-    return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
-  }
 
   function escapeHtml(text: string) {
     const div = document.createElement('div');
@@ -97,252 +167,705 @@ import MobileNav from '../components/MobileNav.astro';
     window.location.href = `/mobile-dashboard?month=${ym}`;
   }
 
-  // ── Render: days left banner ──────────────────────────────────────────────
-  function renderDaysBanner(now: Date) {
+  function iconImportSvg(): string {
+    return `<svg class="mobile-dash-btn-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12V3M8 3L5 6M8 3l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  }
+  function iconSortSvg(): string {
+    return `<svg class="mobile-dash-btn-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 14V4M5 4L2 7M5 4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 2v10M11 12l3-3M11 12l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  function iconListSvg(): string {
+    return `<svg class="mobile-dash-btn-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  }
+
+  function renderDaysBannerForFocus(now: Date, focusYM: string | null) {
     const el = document.getElementById('dbDaysBanner');
     if (!el) return;
-
+    const currentYM = currentCalendarYM(now);
+    if (!focusYM || focusYM !== currentYM) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const daysLeft = lastDay - now.getDate() + 1;
     const monthName = now.toLocaleString('default', { month: 'long' });
-
-    let color: string, bg: string;
-    if (daysLeft > 15) {
-      color = 'var(--accent)';
-      bg = 'rgba(200,245,96,0.10)';
-    } else if (daysLeft >= 8) {
-      color = 'var(--accent2)';
-      bg = 'rgba(245,200,66,0.10)';
-    } else {
-      color = 'var(--red)';
-      bg = 'rgba(245,96,96,0.10)';
-    }
-
-    el.textContent = `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in ${monthName}`;
-    el.style.borderColor = color;
-    el.style.color = color;
-    el.style.background = bg;
+    const tone = daysLeft > 15 ? 'ok' : daysLeft >= 8 ? 'mid' : 'tight';
+    el.className = `mobile-dash-strip mobile-dash-days mobile-dash-days--${tone}`;
+    el.textContent = `${daysLeft}d left · ${monthName}`;
   }
 
-  // ── Render: upload prompt ─────────────────────────────────────────────────
-  function renderUploadPrompt(hasTransactions: boolean, monthName: string) {
-    const el = document.getElementById('dbUploadPrompt');
-    const textEl = document.getElementById('dbUploadText');
-    if (!el || !textEl) return;
-    if (hasTransactions) { el.style.display = 'none'; return; }
-    textEl.textContent = `No transactions imported for ${monthName}`;
-    el.style.display = 'flex';
-  }
-
-  // ── Render: skeleton for category list ─────────────────────────────────────
-  function renderCategorySkeleton() {
-    const container = document.getElementById('dbCatList');
-    if (!container) return;
-    // Match the actual structure: category row + progress bar
-    // Use more items (8) to match typical content height and prevent layout shift
-    container.innerHTML = Array(8).fill(0).map(() => `
+  function renderCategorySkeleton(container: HTMLElement) {
+    container.innerHTML =
+      Array(6)
+        .fill(0)
+        .map(
+          () => `
       <div style="padding-top:10px;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
           <div class="skeleton" style="width:60%;height:14px;flex:1;"></div>
           <div class="skeleton" style="width:80px;height:12px;flex-shrink:0;"></div>
         </div>
         <div class="skeleton" style="width:100%;height:4px;margin-top:6px;border-radius:2px;"></div>
-      </div>
-    `).join('') + '<div style="padding:12px 0 0;margin-top:10px;border-top:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><div class="skeleton" style="width:60px;height:14px;"></div><div class="skeleton" style="width:120px;height:14px;"></div></div></div>';
+      </div>`,
+        )
+        .join('') +
+      '<div style="padding:12px 0 0;margin-top:10px;border-top:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><div class="skeleton" style="width:60px;height:14px;"></div><div class="skeleton" style="width:120px;height:14px;"></div></div></div>';
   }
 
-  // ── Render: category budget list ──────────────────────────────────────────
-  function renderCategories(categories: any[], budgetMap: Record<string, number>) {
-    const container = document.getElementById('dbCatList');
-    if (!container) return;
-
+  function renderCategories(categories: any[], budgetMap: Record<string, number>, container: HTMLElement) {
     if (categories.length === 0) {
-      container.innerHTML = '<div style="color:var(--text-dim);font-size:11px;padding:16px 0;">No categories found.</div>';
+      container.innerHTML =
+        '<div style="color:var(--text-dim);font-size:11px;padding:16px 0;">No categories found.</div>';
       return;
     }
-
     let html = '';
-    let currentGroup = Symbol(); // sentinel — won't match any string
+    let currentGroup: string | symbol = Symbol();
     let totalActual = 0;
     let totalBudget = 0;
-
     for (const cat of categories) {
       const group: string = cat.category_group || 'Other';
       const budget = parseFloat(cat.monthly_amount) || 0;
       const actual = budgetMap[cat.id] ?? 0;
       totalActual += actual;
       totalBudget += budget;
-
       if (group !== currentGroup) {
         currentGroup = group;
         html += `<div style="font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-top: 16px; margin-bottom: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--border);">${escapeHtml(group)}</div>`;
       }
-
       const isOver = budget > 0 && actual > budget;
       const fillColor = isOver ? 'var(--red)' : 'var(--accent)';
       const pct = budget > 0 ? Math.min((actual / budget) * 100, 100) : 0;
-      const amountText = budget > 0
-        ? `${formatCurrency(actual, userCurrency)} / ${formatCurrency(budget, userCurrency)}`
-        : formatCurrency(actual, userCurrency);
-
+      const amountText =
+        budget > 0
+          ? `${formatCurrency(actual, userCurrency)} / ${formatCurrency(budget, userCurrency)}`
+          : formatCurrency(actual, userCurrency);
       html += `
         <div class="mobile-row">
           <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(cat.name)}</span>
           <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0;">${amountText}</span>
         </div>
         <div class="mobile-progress-track">
-          ${budget > 0 && actual > 0
-            ? `<div class="mobile-progress-fill" style="width:${pct.toFixed(1)}%;background:${fillColor};"></div>`
-            : ''}
+          ${
+            budget > 0 && actual > 0
+              ? `<div class="mobile-progress-fill" style="width:${pct.toFixed(1)}%;background:${fillColor};"></div>`
+              : ''
+          }
         </div>`;
     }
-
     html += `
       <div class="mobile-row" style="padding: 12px 0 0; margin-top: 10px; border-top: 1px solid var(--border);">
         <span style="font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.12em; color: var(--text);">TOTAL</span>
         <span style="font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; color: var(--text);">${formatCurrency(totalActual, userCurrency)} / ${formatCurrency(totalBudget, userCurrency)}</span>
       </div>`;
-
     container.innerHTML = html;
   }
 
-  // ── Render: skeleton for calendar ─────────────────────────────────────────
-  function renderCalendarSkeleton() {
+  function renderCalendar(meaningfulSet: Set<string>, focusYM: string, now: Date) {
     const container = document.getElementById('dbCalGrid');
     if (!container) return;
-    container.innerHTML = Array(12).fill(0).map(() => 
-      '<div class="skeleton" style="width:100%;height:36px;border-radius:4px;"></div>'
-    ).join('');
-  }
-
-  // ── Render: monthly calendar ──────────────────────────────────────────────
-  function renderCalendar(txMonthSet: Set<string>, currentYM: string) {
-    const container = document.getElementById('dbCalGrid');
-    if (!container) return;
-
-    const now = new Date();
     const cells: string[] = [];
-
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleString('default', { month: 'short', year: '2-digit' }).toUpperCase();
-      const isCurrent  = ym === currentYM;
-      const isComplete = !isCurrent && txMonthSet.has(ym);
-      const cls = isCurrent ? 'current' : isComplete ? 'complete' : 'empty';
-      cells.push(`<button class="cal-month ${cls}" onclick="goToMonth('${ym}')">${label}</button>`);
+      const isFocus = ym === focusYM;
+      const isComplete = !isFocus && meaningfulSet.has(ym);
+      const cls = isFocus ? 'current' : isComplete ? 'complete' : 'empty';
+      cells.push(`<button type="button" class="cal-month ${cls}" onclick="goToMonth('${ym}')">${label}</button>`);
     }
-
     container.innerHTML = cells.join('');
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  function setPrimaryBtn(href: string, label: string, icon: 'import' | 'sort' | 'list' | 'none') {
+    const btn = document.getElementById('dbPrimaryBtn') as HTMLAnchorElement | null;
+    if (!btn) return;
+    btn.style.display = 'flex';
+    btn.href = href;
+    const ic =
+      icon === 'import' ? iconImportSvg() : icon === 'sort' ? iconSortSvg() : icon === 'list' ? iconListSvg() : '';
+    btn.innerHTML = `${ic}<span>${escapeHtml(label)}</span>`;
+  }
+
+  function hidePrimaryBtn() {
+    const btn = document.getElementById('dbPrimaryBtn') as HTMLAnchorElement | null;
+    if (!btn) return;
+    btn.style.display = 'none';
+    btn.removeAttribute('href');
+    btn.innerHTML = '';
+  }
+
+  let mobileDashAccordionsWired = false;
+  function wireAccordions() {
+    if (mobileDashAccordionsWired) return;
+    mobileDashAccordionsWired = true;
+    const breakdownToggle = document.getElementById('dbBreakdownToggle');
+    const catPanel = document.getElementById('dbCatPanel');
+    if (breakdownToggle && catPanel) {
+      breakdownToggle.onclick = () => {
+        const open = catPanel.hasAttribute('hidden');
+        if (open) {
+          catPanel.removeAttribute('hidden');
+          breakdownToggle.setAttribute('aria-expanded', 'true');
+        } else {
+          catPanel.setAttribute('hidden', '');
+          breakdownToggle.setAttribute('aria-expanded', 'false');
+        }
+      };
+    }
+    const monthsToggle = document.getElementById('dbMonthsToggle');
+    const monthsPanel = document.getElementById('dbMonthsPanel');
+    if (monthsToggle && monthsPanel) {
+      monthsToggle.onclick = () => {
+        const open = monthsPanel.hasAttribute('hidden');
+        if (open) {
+          monthsPanel.removeAttribute('hidden');
+          monthsToggle.setAttribute('aria-expanded', 'true');
+        } else {
+          monthsPanel.setAttribute('hidden', '');
+          monthsToggle.setAttribute('aria-expanded', 'false');
+        }
+      };
+    }
+    const chip = document.getElementById('dbMonthChip');
+    if (chip) {
+      chip.onclick = () => {
+        const monthsPanelEl = document.getElementById('dbMonthsPanel');
+        const monthsToggleEl = document.getElementById('dbMonthsToggle');
+        if (!monthsPanelEl || monthsPanelEl.hasAttribute('hidden')) {
+          monthsPanelEl?.removeAttribute('hidden');
+          monthsToggleEl?.setAttribute('aria-expanded', 'true');
+          monthsPanelEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      };
+    }
+  }
+
+  function expandBreakdown() {
+    const catPanel = document.getElementById('dbCatPanel');
+    const breakdownToggle = document.getElementById('dbBreakdownToggle');
+    catPanel?.removeAttribute('hidden');
+    breakdownToggle?.setAttribute('aria-expanded', 'true');
+    catPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  window.handleSignOut = handleSignOut;
+  window.goToMonth = goToMonth;
+
+  window.expandDbBreakdown = expandBreakdown;
+
   async function init() {
+    const dashRoot = document.querySelector('.mobile-dash-page');
+    let skipSkeletonClear = false;
+
     onAuthStateChange((_event, session) => {
       if (!session?.user) window.location.href = '/auth';
     });
 
+    try {
     const user = await getCurrentUser();
-    if (!user) { window.location.href = '/auth'; return; }
-
-    // Display mode check
-    let mode = localStorage.getItem('display_mode');
-    if (!mode) {
-      const { data } = await supabase
-        .from('user_settings').select('value')
-        .eq('user_id', user.id).eq('key', 'display_mode').single();
-      mode = data?.value || 'auto';
-      localStorage.setItem('display_mode', mode);
-    }
-    if (mode === 'desktop' || (mode === 'auto' && !isMobileDevice())) {
-      window.location.href = '/';
+    if (!user) {
+      skipSkeletonClear = true;
+      window.location.href = '/auth';
       return;
     }
 
-    // Load all user settings at once
-    const { data: settingsRows } = await supabase
-      .from('user_settings').select('key, value').eq('user_id', user.id);
+    const { data: settingsRows } = await supabase.from('user_settings').select('key, value').eq('user_id', user.id);
     const sm = Object.fromEntries((settingsRows || []).map((s: any) => [s.key, s.value]));
     userCurrency = (sm['preferred_currency'] as CurrencyCode) || 'ZAR';
 
-    // Check for selected month in URL param
-    const urlParams = new URLSearchParams(window.location.search);
-    const monthParam = urlParams.get('month');
-    
-    // Current month (always used for days left banner)
     const now = new Date();
-    renderDaysBanner(now);
+    const currentYM = currentCalendarYM(now);
+    const urlParams = new URLSearchParams(window.location.search);
+    const monthParamRaw = urlParams.get('month');
 
-    // Selected month (from URL param, or current month if none)
-    let selectedDate: Date;
-    let selectedMonthStart: string;
-    let selectedYM: string;
-    let selectedMonthName: string;
-    let selectedChipLabel: string;
+    const sortSession = readSortSessionFromStorage(localStorage, user.id);
+    const fyYear = fyStartYear(now);
+    const fyMonths = buildFyMonthStarts(fyYear);
 
-    if (monthParam) {
-      // Parse YYYY-MM format
-      const [year, month] = monthParam.split('-').map(Number);
-      selectedDate = new Date(year, month - 1, 1);
-      selectedMonthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-      selectedYM = monthParam;
-    } else {
-      // Use current month
-      selectedDate = now;
-      selectedMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      selectedYM = selectedMonthStart.slice(0, 7);
-    }
+    const catListEarly = document.getElementById('dbCatList');
+    if (catListEarly) renderCategorySkeleton(catListEarly);
 
-    selectedMonthName = selectedDate.toLocaleString('default', { month: 'long' });
-    selectedChipLabel = selectedDate.toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
-
-    // Update header month label
-    const monthLabelEl = document.getElementById('dbMonthLabel');
-    if (monthLabelEl) monthLabelEl.textContent = selectedChipLabel;
-
-    // Show skeletons immediately to prevent layout shift
-    renderCategorySkeleton();
-    renderCalendarSkeleton();
-    const uploadPromptEl = document.getElementById('dbUploadPrompt');
-    if (uploadPromptEl) uploadPromptEl.style.display = 'none';
-
-    // Parallel data fetch (using selected month)
-    const [budgetRes, categoryRes, txMonthRes] = await Promise.all([
-      supabase.from('budgets')
-        .select('category_id, actual_amount')
-        .eq('user_id', user.id)
-        .eq('month', selectedMonthStart),
-      supabase.from('categories')
-        .select('id, name, monthly_amount, category_group, type')
+    const [{ data: categoryRes }, { data: txRows }, { data: budgetsFy }, { data: budgetsActual }] = await Promise.all([
+      supabase
+        .from('categories')
+        .select('id, name, monthly_amount, category_group, type, sort_order')
         .eq('user_id', user.id)
         .order('sort_order', { ascending: true, nullsFirst: false })
         .order('name', { ascending: true }),
-      supabase.from('transactions')
-        .select('month')
+      supabase.from('transactions').select('month, category_id').eq('user_id', user.id).limit(8000),
+      supabase
+        .from('budgets')
+        .select('month, category_id, actual_amount')
         .eq('user_id', user.id)
-        .order('month'),
+        .in('month', fyMonths),
+      supabase
+        .from('budgets')
+        .select('month, category_id, actual_amount')
+        .eq('user_id', user.id)
+        .gt('actual_amount', 0)
+        .limit(5000),
     ]);
 
-    // Budget map: category_id → total actual spend
-    const budgetMap: Record<string, number> = {};
-    for (const row of (budgetRes.data || [])) {
-      budgetMap[row.category_id] = (budgetMap[row.category_id] ?? 0) + (parseFloat(row.actual_amount) || 0);
+    const categories = categoryRes || [];
+    const expenseIds = new Set(categories.map((c: { id: string }) => c.id));
+    const meaningful = buildMeaningfulMonthSet(txRows || [], budgetsActual || [], expenseIds);
+
+    const { focusYM, fromUrl } = pickFocusYM({
+      urlMonthParam: monthParamRaw,
+      now,
+      meaningful,
+    });
+
+    const monthStartFocus = focusYM ? monthStartIso(focusYM) : null;
+
+    let uncategorizedCount = 0;
+    let budgetFocusRows: { category_id: string; actual_amount: unknown }[] = [];
+    if (monthStartFocus) {
+      const [{ count }, { data: bRows }] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('month', monthStartFocus)
+          .is('category_id', null),
+        supabase.from('budgets').select('category_id, actual_amount').eq('user_id', user.id).eq('month', monthStartFocus),
+      ]);
+      uncategorizedCount = count ?? 0;
+      budgetFocusRows = bRows || [];
     }
 
-    // Distinct months from transactions (YYYY-MM-DD → YYYY-MM)
-    const txMonthSet = new Set<string>(
-      (txMonthRes.data || []).map((r: any) => (r.month as string).slice(0, 7))
-    );
+    const state: DashboardStateId = deriveDashboardState({
+      categoryCount: categories.length,
+      meaningful,
+      focusYM,
+      now,
+      uncategorizedCountForFocus: uncategorizedCount,
+    });
 
-    const hasSelectedMonthTx = txMonthSet.has(selectedYM);
+    const budgetMap: Record<string, number> = {};
+    for (const row of budgetFocusRows) {
+      budgetMap[row.category_id] = (budgetMap[row.category_id] ?? 0) + (parseFloat(String(row.actual_amount)) || 0);
+    }
 
-    renderUploadPrompt(hasSelectedMonthTx, selectedMonthName);
-    renderCategories(categoryRes.data || [], budgetMap);
-    renderCalendar(txMonthSet, selectedYM);
+    const lastClosed = [...meaningful].filter((m) => m < currentYM).sort().pop() ?? null;
+
+    const insightsFy = buildFyInsights(categories, budgetsFy || [], now, userCurrency);
+    const insightLines = insightLinesForMobile(insightsFy, 2);
+
+    const headlineVal = document.getElementById('dbHeadlineValue');
+    const headlineSub = document.getElementById('dbHeadlineSub');
+    const contextEl = document.getElementById('dbContextBanner');
+    const insightBlock = document.getElementById('dbInsightBlock');
+    const insightWidget = document.getElementById('dbInsightWidget');
+    const secondaries = document.getElementById('dbSecondaries');
+    const monthLabelEl = document.getElementById('dbMonthLabel');
+    const snapshotWidget = document.getElementById('dbSnapshotWidget');
+    const snapshotTitleEl = document.getElementById('dbSnapshotTitle');
+    const snapshotList = document.getElementById('dbSnapshotList');
+    const catListEl = document.getElementById('dbCatList');
+    const analyticalFlow = document.getElementById('dbAnalyticalFlow');
+    const metricsStrip = document.getElementById('dbMetricsStrip');
+    const visualAnchor = document.getElementById('dbVisualAnchor');
+
+    if (
+      !headlineVal ||
+      !headlineSub ||
+      !contextEl ||
+      !insightBlock ||
+      !insightWidget ||
+      !secondaries ||
+      !monthLabelEl ||
+      !snapshotWidget ||
+      !snapshotList ||
+      !catListEl ||
+      !analyticalFlow ||
+      !metricsStrip ||
+      !visualAnchor
+    )
+      return;
+
+    analyticalFlow.style.display = 'none';
+    metricsStrip.innerHTML = '';
+    metricsStrip.style.display = 'none';
+    visualAnchor.innerHTML = '';
+    visualAnchor.style.display = 'none';
+    visualAnchor.className = 'mobile-dash-visual-anchor';
+
+    if (focusYM) {
+      const d = new Date(parseInt(focusYM.slice(0, 4), 10), parseInt(focusYM.slice(5, 7), 10) - 1, 1);
+      monthLabelEl.textContent = d.toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
+    } else {
+      monthLabelEl.textContent = '—';
+    }
+
+    contextEl.style.display = 'none';
+    if (sortSession.active) {
+      contextEl.style.display = 'block';
+      contextEl.textContent = 'Sort in progress — pick up where you left off.';
+    } else if (!fromUrl && focusYM && focusYM !== currentYM) {
+      /* Month chip already shows focus; omit redundant viewing copy. */
+    } else if (fromUrl && focusYM && !meaningful.has(focusYM)) {
+      contextEl.style.display = 'block';
+      contextEl.textContent = 'No data for this month yet.';
+    }
+
+    renderDaysBannerForFocus(now, focusYM);
+
+    secondaries.innerHTML = '';
+    hidePrimaryBtn();
+    insightBlock.innerHTML = '';
+    insightWidget.style.display = 'none';
+    snapshotWidget.style.display = 'none';
+    snapshotList.innerHTML = '';
+    if (snapshotTitleEl) snapshotTitleEl.textContent = 'Top categories';
+
+    const catPanel = document.getElementById('dbCatPanel');
+    const breakdownToggle = document.getElementById('dbBreakdownToggle');
+    catPanel?.setAttribute('hidden', '');
+    breakdownToggle?.setAttribute('aria-expanded', 'false');
+
+    if (state === 'onboarding_no_categories') {
+      headlineVal.textContent = '—';
+      headlineSub.textContent = 'Set up your categories first.';
+      setPrimaryBtn('/mobile-settings', 'Add categories', 'none');
+    } else if (state === 'onboarding_no_data') {
+      headlineVal.textContent = '—';
+      headlineSub.textContent = 'Import a CSV when you are ready.';
+      setPrimaryBtn('/mobile-sort', 'Import and sort', 'import');
+      secondaries.innerHTML = `<a class="mobile-dash-link" href="/mobile-settings">Settings</a>`;
+    } else if (state === 'needs_db_attention') {
+      headlineVal.textContent = '—';
+      headlineSub.textContent = 'Some rows still need a category.';
+      setPrimaryBtn('/mobile-sort', 'Finish in Sort', 'sort');
+    } else if (state === 'new_month_idle') {
+      const ymKey = focusYM || currentYM;
+      const mName = new Date(parseInt(ymKey.slice(0, 4), 10), parseInt(ymKey.slice(5, 7), 10) - 1, 1).toLocaleString('default', {
+        month: 'long',
+        year: 'numeric',
+      });
+      headlineVal.textContent = '—';
+      let sub = `No spend in ${mName} yet.`;
+      if (lastClosed) {
+        const d0 = new Date(parseInt(lastClosed.slice(0, 4), 10), parseInt(lastClosed.slice(5, 7), 10) - 1, 1);
+        sub += ` Last data: ${d0.toLocaleString('default', { month: 'short', year: 'numeric' })}.`;
+      }
+      headlineSub.textContent = sub;
+      setPrimaryBtn('/mobile-sort', 'Import and sort', 'import');
+      if (lastClosed) {
+        secondaries.innerHTML = `<a class="mobile-dash-link" href="/mobile-dashboard?month=${lastClosed}">View ${new Date(parseInt(lastClosed.slice(0, 4), 10), parseInt(lastClosed.slice(5, 7), 10) - 1, 1).toLocaleString('default', { month: 'short', year: 'numeric' })}</a>`;
+      }
+      if (insightLines.length) {
+        insightBlock.innerHTML = insightLines
+          .map(
+            (line) =>
+              `<div class="mobile-dash-insight-line mobile-dash-insight-line--${escapeHtml(line.type)}"><span class="mobile-dash-insight-glow" aria-hidden="true"></span><span class="mobile-dash-insight-copy">${escapeHtml(line.text)}</span></div>`,
+          )
+          .join('');
+        insightWidget.style.display = 'block';
+        analyticalFlow.style.display = 'block';
+      }
+    } else if (state === 'processed_home' && focusYM) {
+      const ymMinusOne = (ym: string) => {
+        const y = parseInt(ym.slice(0, 4), 10);
+        const mo = parseInt(ym.slice(5, 7), 10) - 1;
+        const d = new Date(y, mo - 1, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      };
+
+      let totalActual = 0;
+      let totalBudget = 0;
+      for (const cat of categories) {
+        const b = parseFloat(cat.monthly_amount) || 0;
+        const a = budgetMap[cat.id] ?? 0;
+        totalBudget += b;
+        totalActual += a;
+      }
+      headlineVal.textContent = formatCurrency(totalActual, userCurrency);
+      headlineSub.textContent =
+        totalBudget > 0
+          ? totalActual <= totalBudget
+            ? 'On track vs monthly budgets'
+            : 'Over monthly budgets'
+          : 'Set budgets in Settings';
+
+      const prevYmStr = ymMinusOne(focusYM);
+      const hasCurrentMonthData = totalActual > 1e-6;
+      const hasPreviousMonthData = meaningful.has(prevYmStr);
+
+      let budgetMapForSnapshot: Record<string, number> = budgetMap;
+      if (!hasCurrentMonthData && hasPreviousMonthData) {
+        const { data: prevBudgetRows } = await supabase
+          .from('budgets')
+          .select('category_id, actual_amount')
+          .eq('user_id', user.id)
+          .eq('month', monthStartIso(prevYmStr));
+        const bm: Record<string, number> = {};
+        for (const row of prevBudgetRows || []) {
+          bm[row.category_id] = (bm[row.category_id] ?? 0) + (parseFloat(String(row.actual_amount)) || 0);
+        }
+        budgetMapForSnapshot = bm;
+      }
+
+      const mapForTopMetric = hasCurrentMonthData ? budgetMap : budgetMapForSnapshot;
+      const topRanked = [...categories]
+        .map((c: { id: string; name: string }) => ({ id: c.id, name: c.name, a: mapForTopMetric[c.id] ?? 0 }))
+        .sort((x, y) => y.a - x.a)[0];
+
+      const snapshotTitleText =
+        hasCurrentMonthData || !hasPreviousMonthData ? 'Top categories' : "Last month's top categories";
+      if (snapshotTitleEl) snapshotTitleEl.textContent = snapshotTitleText;
+
+      const endD = new Date(parseInt(focusYM.slice(0, 4), 10), parseInt(focusYM.slice(5, 7), 10) - 1, 1);
+      const months6: string[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(endD.getFullYear(), endD.getMonth() - i, 1);
+        months6.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      const startIso = monthStartIso(months6[0]);
+      const endIso = monthStartIso(months6[5]);
+      const { data: sparkRows } = await supabase
+        .from('budgets')
+        .select('month, category_id, actual_amount')
+        .eq('user_id', user.id)
+        .gte('month', startIso)
+        .lte('month', endIso);
+      const byM: Record<string, number> = {};
+      for (const k of months6) byM[k] = 0;
+      for (const r of sparkRows || []) {
+        const ym = String((r as { month: string }).month).slice(0, 7);
+        if (!(ym in byM)) continue;
+        const cid = (r as { category_id: string | null }).category_id;
+        if (!cid || !expenseIds.has(cid)) continue;
+        byM[ym] += parseFloat(String((r as { actual_amount: unknown }).actual_amount || 0));
+      }
+      const vals = months6.map((k) => byM[k] ?? 0);
+      const activeMonths = vals.filter((v) => v > 1e-6).length;
+
+      const prevYmKey = months6[4];
+      const prevYmShortName = new Date(
+        parseInt(prevYmKey.slice(0, 4), 10),
+        parseInt(prevYmKey.slice(5, 7), 10) - 1,
+        1,
+      ).toLocaleString('default', { month: 'short' });
+      const hasPriorMonthSpend = (vals[4] ?? 0) > 1e-6;
+
+      let paceValue =
+        totalBudget > 1e-6
+          ? totalActual <= totalBudget
+            ? totalActual > 1e-6
+              ? 'On track'
+              : 'No spend yet'
+            : 'Over pace'
+          : 'No budgets';
+      let paceHint = '';
+      if (!hasCurrentMonthData && hasPreviousMonthData) {
+        let prevAct = 0;
+        for (const cat of categories) prevAct += budgetMapForSnapshot[cat.id] ?? 0;
+        paceValue = totalBudget > 1e-6 ? (prevAct <= totalBudget ? 'On track' : 'Over pace') : 'No budgets';
+        paceHint = prevYmShortName;
+      }
+
+      let w3Label = 'Spend vs prior';
+      let w3Value = '';
+      let w3Hint = '';
+      if (!hasCurrentMonthData && hasPreviousMonthData) {
+        const p4 = vals[4] ?? 0;
+        const p3 = vals[3] ?? 0;
+        const m3Key = months6[3];
+        const m3Short = new Date(
+          parseInt(m3Key.slice(0, 4), 10),
+          parseInt(m3Key.slice(5, 7), 10) - 1,
+          1,
+        ).toLocaleString('default', { month: 'short' });
+        if (p3 > 1e-6 && p4 > 1e-6) {
+          const rpct = Math.round(((p4 - p3) / p3) * 100);
+          w3Label = 'Spend change';
+          w3Value = rpct === 0 ? `Same as ${m3Short}` : rpct > 0 ? `+${rpct}%` : `${rpct}%`;
+          w3Hint = `vs ${m3Short}`;
+        } else if (p4 > 1e-6) {
+          w3Label = 'Recorded last month';
+          w3Value = formatCurrency(p4, userCurrency);
+          w3Hint = prevYmShortName;
+        } else {
+          w3Label = 'Monthly targets';
+          w3Value = totalBudget > 1e-6 ? formatCurrency(totalBudget, userCurrency) : `${categories.length} categories`;
+          w3Hint = totalBudget > 1e-6 ? 'Budget cap' : '';
+        }
+      } else if (hasCurrentMonthData && !hasPriorMonthSpend) {
+        w3Label = totalBudget > 1e-6 ? 'Monthly targets' : 'Categories';
+        w3Value = totalBudget > 1e-6 ? formatCurrency(totalBudget, userCurrency) : String(categories.length);
+        w3Hint = totalBudget > 1e-6 ? 'Budget cap' : 'Active';
+      } else if (hasCurrentMonthData && hasPriorMonthSpend) {
+        const curM = vals[5] ?? 0;
+        const prevM = vals[4] ?? 0;
+        const rpct = Math.round(((curM - prevM) / prevM) * 100);
+        if (rpct === 0) {
+          w3Value = `Same as ${prevYmShortName}`;
+        } else {
+          w3Value = rpct > 0 ? `+${rpct}%` : `${rpct}%`;
+          w3Hint = `vs ${prevYmShortName}`;
+        }
+      } else {
+        w3Label = 'Monthly targets';
+        w3Value = totalBudget > 1e-6 ? formatCurrency(totalBudget, userCurrency) : `${categories.length} categories`;
+        w3Hint = totalBudget > 1e-6 ? 'Budget cap' : '';
+      }
+
+      const w1MetricLabel = !hasCurrentMonthData && hasPreviousMonthData ? 'Top last month' : 'Top category';
+
+      metricsStrip.innerHTML = `<div class="mobile-dash-metric">
+            <span class="mobile-dash-metric-label">${escapeHtml(w1MetricLabel)}</span>
+            <span class="mobile-dash-metric-value">${topRanked && topRanked.a > 0 ? escapeHtml(topRanked.name) : '—'}</span>${
+              topRanked && topRanked.a > 0
+                ? `<span class="mobile-dash-metric-hint">${escapeHtml(formatCurrency(topRanked.a, userCurrency))}</span>`
+                : ''
+            }
+          </div>
+          <div class="mobile-dash-metric">
+            <span class="mobile-dash-metric-label">Budget pace</span>
+            <span class="mobile-dash-metric-value">${escapeHtml(paceValue)}</span>${paceHint ? `<span class="mobile-dash-metric-hint">${escapeHtml(paceHint)}</span>` : ''}
+          </div>
+          <div class="mobile-dash-metric">
+            <span class="mobile-dash-metric-label">${escapeHtml(w3Label)}</span>
+            <span class="mobile-dash-metric-value">${escapeHtml(w3Value)}</span>${w3Hint ? `<span class="mobile-dash-metric-hint">${escapeHtml(w3Hint)}</span>` : ''}
+          </div>`;
+      metricsStrip.style.display = 'flex';
+
+      if (activeMonths >= 2) {
+        const minV = Math.min(...vals);
+        const maxV = Math.max(...vals);
+        const vbW = 100;
+        const vbH = 56;
+        const padY = 5;
+        const innerH = vbH - padY * 2;
+        const spread = maxV - minV || 1;
+        const n = vals.length;
+        const pts = vals
+          .map((v, i) => {
+            const x = n <= 1 ? vbW / 2 : (i / (n - 1)) * vbW;
+            const y = padY + (1 - (v - minV) / spread) * innerH;
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(' ');
+        const first = vals[0];
+        const last = vals[vals.length - 1];
+        let trend: 'up' | 'down' | 'flat' = 'flat';
+        if (last > first * 1.02) trend = 'up';
+        else if (last < first * 0.98) trend = 'down';
+        const floorY = vbH - 1;
+        const areaPts = `0,${floorY} ${pts} ${vbW},${floorY}`;
+        visualAnchor.className = `mobile-dash-visual-anchor mobile-dash-visual-anchor--${trend}`;
+        visualAnchor.innerHTML = `<svg class="mobile-dash-visual-svg" viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="none" aria-hidden="true"><polygon class="mobile-dash-visual-area" points="${areaPts}" /><polyline fill="none" points="${pts}" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" /></svg>`;
+        visualAnchor.style.display = 'block';
+      }
+
+      setPrimaryBtn('#', 'Review breakdown', 'list');
+      const primary = document.getElementById('dbPrimaryBtn') as HTMLAnchorElement;
+      if (primary) {
+        primary.onclick = (e) => {
+          e.preventDefault();
+          expandBreakdown();
+        };
+      }
+      secondaries.innerHTML = `<button type="button" class="mobile-dash-link" onclick="document.getElementById('dbMonthsToggle')?.click()">Change month</button>
+        <a class="mobile-dash-link" href="/mobile-sort">Sort</a>`;
+
+      if (insightLines.length) {
+        insightBlock.innerHTML = insightLines
+          .map(
+            (line) =>
+              `<div class="mobile-dash-insight-line mobile-dash-insight-line--${escapeHtml(line.type)}"><span class="mobile-dash-insight-glow" aria-hidden="true"></span><span class="mobile-dash-insight-copy">${escapeHtml(line.text)}</span></div>`,
+          )
+          .join('');
+        insightWidget.style.display = 'block';
+      } else {
+        const ranked = [...categories]
+          .map((c: { id: string; name: string }) => ({ id: c.id, name: c.name, a: budgetMap[c.id] ?? 0 }))
+          .sort((x, y) => y.a - x.a)[0];
+        if (ranked && ranked.a > 0) {
+          insightBlock.innerHTML = `<div class="mobile-dash-insight-line mobile-dash-insight-line--info"><span class="mobile-dash-insight-glow" aria-hidden="true"></span><span class="mobile-dash-insight-copy">Top: ${escapeHtml(ranked.name)} · ${formatCurrency(ranked.a, userCurrency)}</span></div>`;
+          insightWidget.style.display = 'block';
+        }
+      }
+
+      const top3 = [...categories]
+        .map((c: { id: string; name: string }) => ({ name: c.name, a: budgetMapForSnapshot[c.id] ?? 0 }))
+        .sort((x, y) => y.a - x.a)
+        .filter((x) => x.a > 0)
+        .slice(0, 3);
+      if (top3.length) {
+        snapshotWidget.style.display = 'block';
+        const maxA = Math.max(...top3.map((x) => x.a), 1e-9);
+        snapshotList.innerHTML = top3
+          .map((r) => {
+            const pct = Math.min(100, Math.round((r.a / maxA) * 100));
+            return `<div class="mobile-dash-snap-row">
+              <div class="mobile-dash-snap-row-top">
+                <span class="mobile-dash-snap-name">${escapeHtml(r.name)}</span>
+                <span class="mobile-dash-snap-amt">${formatCurrency(r.a, userCurrency)}</span>
+              </div>
+              <div class="mobile-dash-snap-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
+            </div>`;
+          })
+          .join('');
+      }
+
+      const flowHas =
+        metricsStrip.style.display !== 'none' ||
+        visualAnchor.style.display !== 'none' ||
+        insightWidget.style.display !== 'none' ||
+        snapshotWidget.style.display !== 'none';
+      analyticalFlow.style.display = flowHas ? 'block' : 'none';
+    }
+
+    if (sortSession.active) {
+      const cont =
+        sortSession.remaining === 1
+          ? '1 left · Continue sort'
+          : `${sortSession.remaining} left · Continue sort`;
+      const inject = `<a class="mobile-dash-link" href="/mobile-sort">${escapeHtml(cont)}</a><button type="button" class="mobile-dash-link" onclick="discardSortSession()">Discard session</button>`;
+      secondaries.innerHTML = secondaries.innerHTML.trim() ? inject + secondaries.innerHTML : inject;
+    }
+
+    renderCategories(categories, budgetMap, catListEl);
+    renderCalendar(meaningful, focusYM || currentYM, now);
+
+    const breakdownCard = document.getElementById('dbBreakdownCard');
+    const monthsCard = document.getElementById('dbMonthsCard');
+    if (breakdownCard) {
+      breakdownCard.style.display =
+        state === 'processed_home' || state === 'new_month_idle' || state === 'needs_db_attention'
+          ? ''
+          : 'none';
+    }
+    if (monthsCard) {
+      monthsCard.style.display = '';
+    }
+
+    wireAccordions();
+    } finally {
+      if (!skipSkeletonClear) {
+        dashRoot?.classList.remove('mobile-dash-loading');
+        const sk = document.getElementById('dbPageSkeleton');
+        if (sk) {
+          sk.removeAttribute('aria-busy');
+          sk.setAttribute('aria-hidden', 'true');
+        }
+      }
+    }
   }
 
-  window.handleSignOut = handleSignOut;
-  window.goToMonth     = goToMonth;
+  window.discardSortSession = async function discardSortSession() {
+    if (!confirm('Discard this sort session? Imported rows in progress will be cleared.')) return;
+    const user = await getCurrentUser();
+    if (!user) return;
+    try {
+      localStorage.removeItem(getMobileSortProgressKey(user.id));
+    } catch {
+      /* ignore */
+    }
+    window.location.reload();
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -352,73 +875,706 @@ import MobileNav from '../components/MobileNav.astro';
 </script>
 
 <style is:global>
-  .db-month-chip {
-    font-family: 'Fraunces', serif;
-    font-size: 15px;
-    font-weight: 300;
-    color: var(--accent);
-    letter-spacing: 0.02em;
+  .mobile-dash-page {
+    --dash-space-xs: 8px;
+    --dash-space-sm: 12px;
+    --dash-space-md: 18px;
+    --dash-space-lg: 22px;
+    --dash-space-xl: 30px;
   }
 
-  /* ── Calendar ──────────────────────────────────────────────────────── */
-  .db-cal-grid {
+  .mobile-dash-loading .mobile-dash-live-root {
+    display: none;
+  }
+
+  .mobile-dash-page-skeleton {
+    display: none;
+    flex-direction: column;
+    gap: var(--dash-space-md);
+    margin-bottom: var(--dash-space-md);
+  }
+
+  .mobile-dash-loading .mobile-dash-page-skeleton {
+    display: flex;
+  }
+
+  .mobile-dash-skeleton-hero {
+    border-radius: 16px;
+    padding: 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-dash-skeleton-chip {
+    height: 28px;
+    width: 120px;
+    border-radius: 999px;
+  }
+
+  .mobile-dash-skeleton-headline {
+    height: 44px;
+    width: 85%;
+    max-width: 280px;
+    border-radius: 8px;
+  }
+
+  .mobile-dash-skeleton-sub {
+    height: 14px;
+    width: 100%;
+  }
+
+  .mobile-dash-skeleton-sub--short {
+    width: 65%;
+  }
+
+  .mobile-dash-skeleton-cta {
+    height: 48px;
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .mobile-dash-skeleton-sheet {
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .mobile-dash-skeleton-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .mobile-dash-skeleton-metric {
+    height: 52px;
+    border-radius: 10px;
+  }
+
+  .mobile-dash-skeleton-line {
+    height: 12px;
+    margin-bottom: 10px;
+  }
+
+  .mobile-dash-skeleton-line:last-child {
+    margin-bottom: 0;
+    width: 80%;
+  }
+
+  .mobile-dash-skeleton-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mobile-dash-skeleton-nav-row {
+    height: 52px;
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  .mobile-dash-widget {
+    margin-bottom: var(--dash-space-md);
+  }
+
+  .mobile-dash-widget--hero {
+    margin-bottom: var(--dash-space-sm);
+  }
+
+  .mobile-dash-widget-surface {
+    border-radius: 16px;
+    transition: transform 0.12s ease, background-color 0.12s ease;
+  }
+
+  .mobile-dash-widget-surface--hero {
+    padding: 12px 14px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 4px 22px rgba(0, 0, 0, 0.28);
+    border-radius: 16px;
+  }
+
+  [data-theme='light'] .mobile-dash-widget-surface--hero {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.045), rgba(0, 0, 0, 0.02));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 4px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  .mobile-dash-analytical-flow {
+    margin-bottom: var(--dash-space-md);
+  }
+
+  .mobile-dash-analytical-sheet {
+    border-radius: 18px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.018));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 4px 20px rgba(0, 0, 0, 0.38);
+    transition: box-shadow 0.18s ease;
+  }
+
+  [data-theme='light'] .mobile-dash-analytical-sheet {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.015));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      0 4px 16px rgba(0, 0, 0, 0.07);
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-analytical-sheet:active {
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 2px 12px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  .mobile-dash-metrics-strip {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding: 12px 12px 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobile-dash-metrics-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-dash-metric {
+    flex: 0 0 auto;
+    min-width: 108px;
+    max-width: 140px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.035);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: transform 0.12s ease, background-color 0.12s ease;
+  }
+
+  [data-theme='light'] .mobile-dash-metric {
+    background: rgba(0, 0, 0, 0.035);
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-metric:active {
+      transform: scale(0.98);
+    }
+  }
+
+  .mobile-dash-metric-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0.9;
+  }
+
+  .mobile-dash-metric-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .mobile-dash-metric-hint {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0.85;
+  }
+
+  .mobile-dash-visual-anchor {
+    padding: 2px 12px 4px;
+    color: var(--accent);
+  }
+
+  .mobile-dash-visual-anchor--down {
+    color: color-mix(in srgb, var(--muted) 75%, var(--accent) 25%);
+  }
+
+  .mobile-dash-visual-svg {
+    width: 100%;
+    height: 92px;
+    display: block;
+    opacity: 0.88;
+  }
+
+  .mobile-dash-visual-area {
+    fill: currentColor;
+    opacity: 0.09;
+  }
+
+  .mobile-dash-visual-anchor--up .mobile-dash-visual-area {
+    opacity: 0.11;
+  }
+
+  .mobile-dash-visual-anchor polyline {
+    opacity: 0.55;
+  }
+
+  .mobile-dash-visual-anchor--up polyline {
+    opacity: 0.62;
+  }
+
+  .mobile-dash-flow-zone--insights {
+    padding: 14px 14px 8px;
+    margin-top: 0;
+  }
+
+  .mobile-dash-flow-zone--cats {
+    padding: 2px 14px 14px;
+    margin-top: 0;
+  }
+
+  .mobile-dash-flow-kicker {
+    margin: 0 0 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0.82;
+  }
+
+  .mobile-dash-hero-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .mobile-dash-strip {
+    margin: 0;
+    padding: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    line-height: 1.35;
+    text-align: left;
+  }
+
+  .mobile-dash-context {
+    opacity: 0.92;
+  }
+
+  .mobile-dash-days {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .mobile-dash-days--ok {
+    color: var(--accent);
+  }
+  .mobile-dash-days--mid {
+    color: var(--accent2);
+  }
+  .mobile-dash-days--tight {
+    color: var(--red);
+  }
+
+  .mobile-dash-month-trigger {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0 0 4px;
+    margin-bottom: 6px;
+    text-align: left;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-month-trigger:active {
+      transform: scale(0.97);
+      opacity: 0.92;
+    }
+  }
+
+  .db-month-chip {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .db-month-chip--btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+
+  .mobile-dash-hero-value {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(2.1rem, 8.5vw, 2.65rem);
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.04;
+    letter-spacing: -0.022em;
+  }
+
+  .mobile-dash-hero-sub {
+    margin: 6px 0 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-dim);
+    line-height: 1.45;
+    max-width: 34em;
+    opacity: 0.92;
+  }
+
+  .mobile-dash-hero-cta-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 0;
+  }
+
+  .mobile-dash-primary-cta.mobile-btn-primary {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-primary-cta.mobile-btn-primary:active {
+      transform: scale(0.96);
+    }
+  }
+
+  .mobile-dash-btn-icon {
+    flex-shrink: 0;
+  }
+
+  .mobile-dash-secondaries {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    padding-top: 2px;
+  }
+
+  .mobile-dash-secondaries .mobile-dash-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text);
+    opacity: 0.88;
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease, opacity 0.12s ease,
+      transform 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  [data-theme='light'] .mobile-dash-secondaries .mobile-dash-link {
+    background: rgba(0, 0, 0, 0.045);
+    box-shadow: none;
+    color: var(--text);
+    opacity: 0.92;
+  }
+
+  .mobile-dash-secondaries .mobile-dash-link:hover {
+    color: var(--accent);
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  .mobile-dash-secondaries a.mobile-dash-link:hover {
+    text-decoration: none;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-secondaries .mobile-dash-link:active {
+      transform: scale(0.96);
+      opacity: 0.9;
+    }
+  }
+
+  .mobile-dash-insights-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .mobile-dash-insight-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 2px 0 2px 8px;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    border-left: 2px solid transparent;
+    background: transparent;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--text-dim);
+  }
+
+  .mobile-dash-insight-glow {
+    display: none;
+  }
+
+  .mobile-dash-insight-line--critical {
+    border-left-color: color-mix(in srgb, var(--red) 65%, transparent);
+  }
+  .mobile-dash-insight-line--warning {
+    border-left-color: color-mix(in srgb, var(--accent2) 55%, transparent);
+  }
+  .mobile-dash-insight-line--good {
+    border-left-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+  .mobile-dash-insight-line--info {
+    border-left-color: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+
+  .mobile-dash-insight-copy {
+    color: var(--text-dim);
+    opacity: 0.88;
+  }
+
+  .mobile-dash-snapshot-title {
+    margin: 0 0 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0.75;
+  }
+
+  .mobile-dash-snapshot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .mobile-dash-snap-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+  }
+
+  .mobile-dash-snap-row-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .mobile-dash-snap-bar {
+    height: 3px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    overflow: hidden;
+  }
+
+  .mobile-dash-snap-bar span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    min-width: 3px;
+    transition: width 0.2s ease;
+  }
+
+  .mobile-dash-snap-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-dash-snap-amt {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    opacity: 0.82;
+  }
+
+  .mobile-dash-nav-stack {
+    margin-top: 4px;
+    margin-bottom: var(--dash-space-lg);
+  }
+
+  .mobile-dash-nav-row {
+    border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  }
+
+  .mobile-dash-nav-row:first-child {
+    border-top: none;
+  }
+
+  .mobile-dash-nav-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--dash-space-md);
+    padding: 12px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 10px;
+    margin: 0 -2px;
+    padding-left: 2px;
+    padding-right: 2px;
+    transition: background-color 0.12s ease, transform 0.12s ease;
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-nav-trigger:active {
+      background: color-mix(in srgb, var(--text) 6%, transparent);
+      transform: scale(0.995);
+    }
+  }
+
+  .mobile-dash-nav-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    opacity: 0.9;
+  }
+
+  .mobile-dash-chevron {
+    flex-shrink: 0;
+    color: var(--text-dim);
+    opacity: 0.75;
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-dash-nav-trigger[aria-expanded='true'] .mobile-dash-chevron {
+    transform: rotate(180deg);
+  }
+
+  .mobile-dash-nav-panel[hidden] {
+    display: none;
+  }
+
+  .mobile-dash-nav-panel:not([hidden]) {
+    padding-bottom: var(--dash-space-sm);
+  }
+
+  .mobile-dash-cat-list {
+    min-height: 0;
+    padding-top: var(--dash-space-xs);
+  }
+
+  .mobile-dash-months-panel .db-cal-grid {
+    margin-top: var(--dash-space-sm);
+  }
+
+  .mobile-dash-page .db-cal-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 
-  .cal-month {
-    padding: 8px 12px;
-    border-radius: 4px;
+  .mobile-dash-page .cal-month {
+    padding: 10px 8px;
+    border-radius: 10px;
     font-family: 'DM Mono', monospace;
-    font-size: 11px;
+    font-size: 10px;
     text-align: center;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(128, 128, 128, 0.2);
     background: transparent;
     cursor: pointer;
-    letter-spacing: 0.05em;
-    transition: all 0.15s;
+    letter-spacing: 0.06em;
+    transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.12s ease;
   }
 
-  .cal-month.complete {
-    background: rgba(200,245,96,0.12);
-    border-color: var(--accent);
+  @media (hover: none) and (pointer: coarse) {
+    .mobile-dash-page .cal-month:active {
+      transform: scale(0.96);
+    }
+  }
+
+  .mobile-dash-page .cal-month.complete {
+    background: rgba(200, 245, 96, 0.08);
+    border-color: rgba(200, 245, 96, 0.35);
     color: var(--accent);
   }
 
-  .cal-month.current {
+  .mobile-dash-page .cal-month.current {
     border-color: var(--text-dim);
     color: var(--text);
+    font-weight: 500;
   }
 
-  .cal-month.empty {
+  .mobile-dash-page .cal-month.empty {
     color: var(--text-dim);
-    opacity: 0.5;
+    opacity: 0.45;
   }
 
-  .cal-month:hover {
+  .mobile-dash-page .cal-month:hover {
     border-color: var(--accent);
     color: var(--accent);
     opacity: 1;
   }
 
   .signout-link {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    padding: 0;
-    text-decoration: none;
     transition: color 0.15s;
   }
-  .signout-link:hover { color: var(--red); }
 
-  /* Prevent layout shift when switching months */
-  #dbCatList {
-    min-height: 400px;
+  .signout-link:hover {
+    color: var(--red);
   }
 </style>
 

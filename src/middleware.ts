@@ -1,8 +1,11 @@
 import { defineMiddleware } from 'astro:middleware';
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  // Trim whitespace/newlines from environment variable
-  const mode = (import.meta.env.PUBLIC_SITE_MODE ?? 'desktop').trim();
+  // Trim whitespace/newlines. Default `auto`: no path redirects — client `viewport-guard.js`
+  // picks mobile vs desktop by viewport; keep `auto` (or unset) for that behavior.
+  // Set PUBLIC_SITE_MODE=mobile | desktop only for fixed mobile-only / desktop-only deploys.
+  const raw = (import.meta.env.PUBLIC_SITE_MODE ?? 'auto').trim();
+  const mode = raw === '' ? 'auto' : raw;
   const pathname = context.url.pathname;
 
   const isMobileRoute = pathname.startsWith('/mobile');

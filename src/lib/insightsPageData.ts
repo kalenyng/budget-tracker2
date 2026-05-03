@@ -13,8 +13,8 @@ import { getMonthsElapsed, getYearlyMetrics, type SpendStatus } from './yearlyMe
 export type InsightsFyPaceVisual = 'ok' | 'warn' | 'bad' | 'neutral';
 
 export interface CumulativeBurnPoint {
-  /** 1-based day index from 1 Apr (start of FY). */
-  dayOfFy: number;
+  /** FY month slot: 1 = April … 12 = March. */
+  fyMonthIndex: number;
   actual: number | null;
   expected: number;
 }
@@ -54,8 +54,6 @@ export interface InsightsPagePayload {
   fyStatusLabel: string;
   fyStatusDetail: string;
   monthsElapsed: number;
-  fyDaysElapsed: number;
-  fyDaysTotal: number;
   yearBudget: number;
   yearActual: number;
   expectedSpendFyToDate: number;
@@ -105,20 +103,6 @@ function spendStatusToVisual(status: SpendStatus): InsightsFyPaceVisual {
 }
 
 /** 1-based day of FY for a calendar date (local), or null if outside FY. */
-function dayOfFinancialYear(fyYear: number, dateStr: string): number | null {
-  const parts = dateStr.slice(0, 10).split('-');
-  const y = parseInt(parts[0] || '0', 10);
-  const m = parseInt(parts[1] || '0', 10) - 1;
-  const d = parseInt(parts[2] || '0', 10);
-  if (!y || m < 0 || m > 11 || d < 1) return null;
-  const dt = new Date(y, m, d);
-  const fy0 = new Date(fyYear, 3, 1);
-  const fyEnd = new Date(fyYear + 1, 3, 1);
-  if (dt < fy0 || dt >= fyEnd) return null;
-  const idx = Math.floor((dt.getTime() - fy0.getTime()) / 86400000) + 1;
-  return idx >= 1 ? idx : null;
-}
-
 export async function loadInsightsPageData(
   supabase: SupabaseClient,
   userId: string,
@@ -129,18 +113,7 @@ export async function loadInsightsPageData(
   const fyMonths = buildFyMonths(fyYear);
   const fyLabel = `FY ${fyYear}/${String(fyYear + 1).slice(2)}`;
 
-  const fyStart = new Date(fyYear, 3, 1);
-  const fyEndExclusive = new Date(fyYear + 1, 3, 1);
-  const fyDaysTotal = Math.max(
-    1,
-    Math.round((fyEndExclusive.getTime() - fyStart.getTime()) / 86400000),
-  );
-  const fyDaysElapsed = Math.min(
-    fyDaysTotal,
-    Math.max(1, Math.floor((now.getTime() - fyStart.getTime()) / 86400000) + 1),
-  );
-
-  const [{ data: categories, error: catErr }, { data: budgetsFy }, { data: txFy }] = await Promise.all([
+  const [{ data: categories, error: catErr }, { data: budgetsFy }] = await Promise.all([
     supabase
       .from('categories')
       .select('id, name, monthly_amount, sort_order, type')
@@ -150,11 +123,6 @@ export async function loadInsightsPageData(
     supabase
       .from('budgets')
       .select('month, category_id, budget_amount, actual_amount')
-      .eq('user_id', userId)
-      .in('month', fyMonths),
-    supabase
-      .from('transactions')
-      .select('date, amount, category_id, month')
       .eq('user_id', userId)
       .in('month', fyMonths),
   ]);
@@ -246,25 +214,17 @@ export async function loadInsightsPageData(
         })
       : [];
 
-  // ── FY cumulative spend by day (expenses from transactions) vs linear annual budget ──
-  const dailyExpense: number[] = Array(fyDaysTotal + 2).fill(0);
-  for (const tx of txFy || []) {
-    if (tx.amount >= 0) continue;
-    const ds = (tx.date || '').slice(0, 10);
-    if (!ds) continue;
-    const di = dayOfFinancialYear(fyYear, ds);
-    if (di == null || di < 1 || di > fyDaysTotal) continue;
-    dailyExpense[di] += -Number(tx.amount);
-  }
-
-  let run = 0;
+  // ── FY cumulative actual (budget month rolls) vs linear annual budget, by FY month ──
+  let cumBudgetActual = 0;
   const cumulativeFyBurn: CumulativeBurnPoint[] = [];
-  for (let day = 1; day <= fyDaysTotal; day++) {
-    run += dailyExpense[day];
-    const expected = yearBudget > 0 ? yearBudget * (day / fyDaysTotal) : 0;
+  for (let i = 0; i < fyMonths.length; i++) {
+    const m = fyMonths[i];
+    cumBudgetActual += totalActualByMonth[m] || 0;
+    const fyMonthIndex = i + 1;
+    const expected = yearBudget > 0 ? yearBudget * (fyMonthIndex / 12) : 0;
     cumulativeFyBurn.push({
-      dayOfFy: day,
-      actual: day <= fyDaysElapsed ? run : null,
+      fyMonthIndex,
+      actual: fyMonthIndex <= monthsElapsed ? cumBudgetActual : null,
       expected,
     });
   }
@@ -398,8 +358,6 @@ export async function loadInsightsPageData(
     fyStatusLabel,
     fyStatusDetail,
     monthsElapsed,
-    fyDaysElapsed,
-    fyDaysTotal,
     yearBudget,
     yearActual,
     expectedSpendFyToDate,
